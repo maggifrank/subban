@@ -1,0 +1,21 @@
+# Copy to /etc/systemd/system/sund.service inside the LXC container, then:
+#   systemctl daemon-reload && systemctl enable --now sund
+[Unit]
+Description=Sund swim tracker
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/sund
+ExecStart=/usr/bin/node /opt/sund/serve.js
+Environment=PORT=8080
+Restart=on-failure
+User=sund
+Group=sund
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

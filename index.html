@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="is">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b3d5c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e8f4fa" media="(prefers-color-scheme: light)">
+<title>Sund — swim tracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏊</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="app">
+
+  <header class="head">
+    <h1>Sund</h1>
+    <button id="settings-toggle" class="icon-btn" aria-expanded="false" aria-controls="settings" title="Settings">⚙</button>
+  </header>
+
+  <section class="counter" aria-labelledby="trips-label">
+    <div id="trips-label" class="label">Trips this membership</div>
+    <div class="count-row">
+      <button id="minus" class="step step--minus" aria-label="Remove a trip">−</button>
+      <output id="trips" class="count" aria-live="polite">0</output>
+      <button id="plus" class="step step--plus" aria-label="Add a trip">+</button>
+    </div>
+    <div id="last-swim" class="sub"></div>
+  </section>
+
+  <section class="hero" aria-labelledby="cpt-label">
+    <div id="cpt-label" class="label">Cost per trip so far</div>
+    <div id="cost-per-trip" class="hero-value">—</div>
+    <div id="cost-per-trip-sub" class="sub"></div>
+  </section>
+
+  <section class="card" aria-labelledby="be-label">
+    <div id="be-label" class="label">Break-even vs 30-trip cards</div>
+    <div class="progress" role="img" aria-label="Progress toward break-even">
+      <div id="progress-fill" class="progress-fill" style="width:0%"></div>
+    </div>
+    <div id="breakeven-line" class="big-line">—</div>
+    <p id="breakeven-note" class="note"></p>
+  </section>
+
+  <section class="grid">
+    <div class="stat">
+      <div class="label">Card price per trip</div>
+      <div id="card-per-trip" class="stat-value">—</div>
+      <div id="card-per-trip-sub" class="sub"></div>
+    </div>
+    <div class="stat">
+      <div class="label">Ahead / behind</div>
+      <div id="delta" class="stat-value">—</div>
+      <div id="delta-sub" class="sub"></div>
+    </div>
+  </section>
+
+  <section id="settings" class="card settings" hidden>
+    <div class="label">Settings</div>
+    <label>Membership cost (kr)
+      <input id="in-membership" type="number" min="0" step="100" inputmode="numeric">
+    </label>
+    <label>Multi-trip card price (kr)
+      <input id="in-card-price" type="number" min="0" step="100" inputmode="numeric">
+    </label>
+    <label>Trips per card
+      <input id="in-card-trips" type="number" min="1" step="1" inputmode="numeric">
+    </label>
+    <div class="settings-actions">
+      <button id="export" class="ghost-btn" type="button">Export data</button>
+      <button id="reset" class="danger-btn" type="button">Reset trips</button>
+    </div>
+    <p class="note">Saved in this browser only (localStorage).</p>
+  </section>
+
+</main>
+<script src="app.js"></script>
+</body>
+</html>
