@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handle } from './lib/api.js';
 import { emptyState, normalize } from './lib/state.js';
+import { emptyRates, refreshThrough } from './lib/rates.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.argv[2] || process.env.PORT || 8080);
@@ -56,6 +57,14 @@ const store = {
   }
 };
 
+/* ---------- exchange rates ---------- */
+
+/* Kept in memory rather than in the state file: it is a cache, not user data,
+   and writing it there would bump `rev` and make every client think the trips
+   had changed. A restart costs one refetch. */
+let rateCache = emptyRates();
+const rates = () => refreshThrough(rateCache, (next) => { rateCache = next; });
+
 /* ---------- http ---------- */
 
 const readBody = (req) => new Promise((resolve) => {
@@ -81,7 +90,7 @@ http.createServer(async (req, res) => {
     if (body === undefined) return send(res, 400, { error: 'Invalid JSON' });
     const token = (req.headers.authorization || '').replace(/^Bearer /, '');
     const { status, body: out } = await handle(
-      { method: req.method, path: url, body, token }, store, TOKEN
+      { method: req.method, path: url, body, token }, { store, rates }, TOKEN
     );
     return send(res, status, out);
   }

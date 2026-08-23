@@ -5,8 +5,10 @@
 import { getStore } from '@netlify/blobs';
 import { handle } from '../../lib/api.js';
 import { emptyState, normalize } from '../../lib/state.js';
+import { emptyRates, refreshThrough } from '../../lib/rates.js';
 
 const KEY = 'state';
+const RATES_KEY = 'rates';
 
 // Strong consistency: the phone must see the swim the laptop just logged.
 const blobs = () => getStore({ name: 'sund', consistency: 'strong' });
@@ -24,6 +26,20 @@ const store = {
   }
 };
 
+/* Functions are stateless per invocation, so the rate cache lives in Blobs
+   alongside the state — otherwise every cold start would refetch. */
+const rates = async () => {
+  let cached;
+  try {
+    cached = await blobs().get(RATES_KEY, { type: 'json' });
+  } catch {
+    cached = null;
+  }
+  return refreshThrough(cached ?? emptyRates(), async (next) => {
+    try { await blobs().setJSON(RATES_KEY, next); } catch { /* serve it anyway */ }
+  });
+};
+
 export default async (req) => {
   const { pathname } = new URL(req.url);
 
@@ -39,7 +55,7 @@ export default async (req) => {
 
   const token = (req.headers.get('authorization') || '').replace(/^Bearer /, '');
   const { status, body: out } = await handle(
-    { method: req.method, path: pathname, body, token }, store, process.env.SUND_TOKEN || ''
+    { method: req.method, path: pathname, body, token }, { store, rates }, process.env.SUND_TOKEN || ''
   );
 
   return Response.json(out, { status, headers: { 'Cache-Control': 'no-store' } });

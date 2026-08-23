@@ -53,6 +53,29 @@ Dates and numbers are formatted by hand rather than through `Intl`, because the
 browsers this runs in may not ship `is-IS` locale data and `Intl` fails soft — it
 would quietly print Icelandic prices with US commas rather than erroring.
 
+## Currency
+
+The display currency follows the language: **ISK** in Icelandic, **USD** in
+English, **PLN** in Polish.
+
+Everything is *stored and entered* in ISK, because that is the money actually
+handed over at the pool. Other currencies are a display conversion applied on
+the way out, so the settings fields stay in kr in every language and a rounding
+trip through zloty can never corrupt a recorded price. A line at the foot of the
+app says which rate was used and when, so no converted figure is presented as if
+it were a till receipt.
+
+Rates come from the European Central Bank via
+[frankfurter.dev](https://frankfurter.dev) — no API key, no account. The server
+fetches them, caches for 12 hours (the ECB publishes once a working day) and
+retries after 10 minutes if a fetch fails, so a rates outage costs one log line
+rather than a stream of requests. **If no rate is available the app shows ISK and
+says so** rather than inventing one.
+
+This is the app's only outbound network call. `GET /api/rates` sits behind the
+same access code as everything else, so an open instance can't be used to drive
+outbound fetches on your behalf.
+
 ## Trips per month
 
 A column chart above the history panel, one bar per month from your first trip
@@ -114,6 +137,7 @@ touch a few times a week, polling is less to go wrong.
 | `DELETE /api/trips/last` | undo the last one |
 | `DELETE /api/trips/one` | remove one trip by timestamp (`{ at }`) |
 | `DELETE /api/trips` | clear the season |
+| `GET /api/rates` | cached ECB rates for the display conversion |
 | `PUT /api/settings` | change the prices |
 
 `lib/state.js` (the domain logic) and `lib/api.js` (the routing) are shared by
@@ -191,6 +215,9 @@ your count, and is a shared code rather than real per-user accounts.
   plural rules are right, but term choices are worth a second opinion —
   *núllpunktur* / *fjölnotakort* in Icelandic, and *wejście* (pool admission)
   and *próg opłacalności* in Polish.
+- **Conversion is display-only and follows the language.** Someone reading in
+  Polish still pays ISK at the pool; the zloty figure is a convenience, not a
+  price. There is no way to pick a currency independently of the language.
 - **No membership start date.** The app counts trips, not the year they belong
   to. When the membership renews, use **Reset trips** to start the new season.
 
@@ -200,7 +227,9 @@ your count, and is a shared code rather than real per-user accounts.
 |---|---|
 | `index.html` `styles.css` `app.js` | the app |
 | `lib/state.js` `lib/api.js` | domain logic and routing, shared by everything |
-| `lib/i18n.js` | Icelandic and English strings, plurals, date and number formats |
+| `lib/i18n.js` | Icelandic, English and Polish strings, plurals, date and number formats |
+| `lib/money.js` | currency per language, conversion and formatting |
+| `lib/rates.js` | ECB rate fetching and cache freshness, shared by both backends |
 | `serve.js` | LXC backend — static files + API, file-backed, no dependencies |
 | `netlify/functions/trips.js` | Netlify backend — same API, Blobs-backed |
 | `deploy/sund.service` | systemd unit |

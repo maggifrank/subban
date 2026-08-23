@@ -7,19 +7,22 @@ import {
   costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips
 } from './lib/state.js';
 import {
-  LANGS, LANG_NAMES, DEFAULT_LANG, detectLang, t, plural, kr, ordinal, formatDate, formatTime
+  LANGS, LANG_NAMES, DEFAULT_LANG, detectLang, t, plural, ordinal, formatDate, formatTime
 } from './lib/i18n.js';
+import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 
 const CACHE_KEY = 'sund.cache.v2';
 const TOKEN_KEY = 'sund.token';
 const LANG_KEY = 'sund.lang';
 const POLL_MS = 15000;
+const RATES_MS = 30 * 60 * 1000;   // the server caches for 12h; this is just a nudge
 const CHART_MONTHS = 12;
 
 let confirmed = emptyState();
 let queue = [];
 let token = localStorage.getItem(TOKEN_KEY) || '';
 let lang = detectLang();
+let rates = null;         // whatever /api/rates last returned, or null
 let status = 'syncing';   // syncing | synced | offline | locked | error
 let lastError = '';
 let flushing = false;
@@ -148,6 +151,7 @@ const ui = {
   cardPerTrip: el('card-per-trip'), cardPerTripSub: el('card-per-trip-sub'),
   delta: el('delta'), deltaSub: el('delta-sub'),
   sync: el('sync'), syncText: el('sync-text'), langSelect: el('lang-select'),
+  rateNote: el('rate-note'),
   chart: el('chart'),
   historyToggle: el('history-toggle'), historyPanel: el('history-panel'), historyBody: el('history-body'),
   historySummary: el('history-summary'),
@@ -200,6 +204,34 @@ function setStatus(next) {
       })();
   ui.syncText.textContent = text;
   ui.sync.title = text;
+}
+
+/* Say plainly that a number has been converted, and at what rate — the prices
+   on screen are not the prices on the till receipt. */
+function renderRateNote() {
+  const wantsConversion = currencyFor(lang) !== 'ISK';
+  if (!wantsConversion) {
+    ui.rateNote.hidden = true;
+    ui.rateNote.textContent = '';
+    return;
+  }
+  ui.rateNote.hidden = false;
+  ui.rateNote.textContent = isConverted(lang, rates)
+    ? t(lang, 'rate.note', {
+        date: formatDate(lang, `${rates.date}T12:00:00Z`, 'full'),
+        rate: rateString(lang, rates),
+        code: currencyFor(lang)
+      })
+    : t(lang, 'rate.unavailable');
+}
+
+async function loadRates() {
+  try {
+    rates = await api('GET', '/api/rates');
+  } catch {
+    rates = null;             // stay in ISK rather than invent a rate
+  }
+  render();
 }
 
 /* ---------- chart: trips per month ---------- */
@@ -424,11 +456,11 @@ function render() {
     : t(lang, 'counter.none');
 
   const cpt = costPerTrip(s, n);
-  ui.costPerTrip.textContent = cpt === null ? '—' : kr(lang, cpt);
+  ui.costPerTrip.textContent = cpt === null ? '—' : money(lang, cpt, rates);
   ui.costPerTrip.classList.toggle('is-empty', cpt === null);
   ui.costPerTripSub.textContent = cpt === null
-    ? t(lang, 'cost.unused', { total: kr(lang, s.membership) })
-    : t(lang, 'cost.sub', { total: kr(lang, s.membership), trips: plural(lang, n, 'trip') });
+    ? t(lang, 'cost.unused', { total: money(lang, s.membership, rates) })
+    : t(lang, 'cost.sub', { total: money(lang, s.membership, rates), trips: plural(lang, n, 'trip') });
 
   ui.beLabel.textContent = t(lang, 'be.label', { n: s.cardTrips });
   ui.progressFill.style.width = `${Math.min(100, (n / be) * 100)}%`;
@@ -442,21 +474,22 @@ function render() {
       : t(lang, 'be.toGo', { left: plural(lang, be - n, 'trip'), total: be });
   }
   ui.breakevenNote.textContent = t(lang, 'be.note', {
-    cardTrips: s.cardTrips, perTrip: kr(lang, perCardTrip), be, cashBe,
+    cardTrips: s.cardTrips, perTrip: money(lang, perCardTrip, rates), be, cashBe,
     cards: ordinal(lang, cards)      // "3." in is/pl, "3rd" in en
   });
 
-  ui.cardPerTrip.textContent = kr(lang, perCardTrip);
+  ui.cardPerTrip.textContent = money(lang, perCardTrip, rates);
   ui.cardPerTripSub.textContent = t(lang, 'stat.cardPerTripSub', {
-    price: kr(lang, s.cardPrice), trips: plural(lang, s.cardTrips, 'trip')
+    price: money(lang, s.cardPrice, rates), trips: plural(lang, s.cardTrips, 'trip')
   });
 
   const delta = perCardTrip * n - s.membership;
-  ui.delta.textContent = (delta >= 0 ? '+' : '−') + kr(lang, Math.abs(delta));
+  ui.delta.textContent = (delta >= 0 ? '+' : '−') + money(lang, Math.abs(delta), rates);
   ui.delta.classList.toggle('is-good', delta >= 0);
   ui.delta.classList.toggle('is-bad', delta < 0);
   ui.deltaSub.textContent = delta >= 0 ? t(lang, 'stat.saved') : t(lang, 'stat.owed');
 
+  renderRateNote();
   renderChart(state.trips);
   renderHistory(state.trips);
 
@@ -488,7 +521,10 @@ for (const code of LANGS) {
   opt.textContent = LANG_NAMES[code];
   ui.langSelect.append(opt);
 }
-ui.langSelect.addEventListener('change', () => setLang(ui.langSelect.value));
+ui.langSelect.addEventListener('change', () => {
+  setLang(ui.langSelect.value);
+  if (!rates && currencyFor(lang) !== 'ISK') loadRates();   // retry for the new currency
+});
 
 ui.historyToggle.addEventListener('click', () => {
   const open = ui.historyPanel.hidden;
@@ -592,7 +628,9 @@ render();
    waits its turn instead of racing. */
 flush();
 poll({ force: true });
+loadRates();
 
 setInterval(poll, POLL_MS);
+setInterval(loadRates, RATES_MS);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { flush(); poll({ force: true }); } });
 window.addEventListener('online', () => { flush(); poll({ force: true }); });

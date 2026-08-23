@@ -436,3 +436,10 @@ h1 {
   white-space: nowrap;
 }
 .head-right { min-width: 0; }
+
+.rate-note {
+  margin: 2px 4px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-dim);
+}
