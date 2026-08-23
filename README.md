@@ -30,6 +30,19 @@ you're ahead on money spent, **78** is when you're ahead on value received.
 
 All three numbers are editable under ⚙, and the change syncs like everything else.
 
+## History
+
+Every trip is timestamped, and the **History** panel lists them newest-first,
+grouped by month with a count per month — enough to see whether you're on pace
+for 78 without doing arithmetic. Each row can be deleted individually, which is
+the only way to fix a mis-tap from three weeks ago; the − button only ever
+removes the most recent trip.
+
+Deletes are matched by timestamp rather than position, so removing a trip on one
+device does the right thing even if the other device added one meanwhile. A
+delete that has already been applied is a no-op rather than an error, so a queued
+offline delete can't remove two trips if it gets retried.
+
 ## How syncing works
 
 Taps apply **instantly** and sync in the background, so the app stays usable on
@@ -52,6 +65,7 @@ touch a few times a week, polling is less to go wrong.
 | `GET /api/state` | full state — trips, settings, `rev` |
 | `POST /api/trips` | log a swim |
 | `DELETE /api/trips/last` | undo the last one |
+| `DELETE /api/trips/one` | remove one trip by timestamp (`{ at }`) |
 | `DELETE /api/trips` | clear the season |
 | `PUT /api/settings` | change the prices |
 
@@ -120,8 +134,9 @@ your count, and is a shared code rather than real per-user accounts.
 - **On Netlify, the blob read-modify-write isn't transactional.** Two swims
   logged in the same instant from different devices could theoretically collapse
   into one. The LXC backend serializes writes and doesn't have this problem.
-- **No history view.** Trips are timestamped and included in the export, but the
-  UI only shows the count and the date of the last swim.
+- **No backdating.** Trips are stamped with the moment you tap +. If you forget
+  to log a swim, you can add one now and the date will be wrong; there's no way
+  to enter last Tuesday.
 
 ## Files
 

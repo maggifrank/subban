@@ -3,7 +3,7 @@
    still works with a phone in a pool changing room on one bar of signal. */
 
 import {
-  emptyState, normalize, addTrip, removeLastTrip, clearTrips, updateSettings,
+  emptyState, normalize, addTrip, removeLastTrip, removeTripAt, clearTrips, updateSettings,
   costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips
 } from './lib/state.js';
 
@@ -39,6 +39,7 @@ const saveCache = () =>
 const OPS = {
   add: (s, op) => addTrip(s, op.at),
   remove: (s) => removeLastTrip(s),
+  removeAt: (s, op) => removeTripAt(s, op.at),
   clear: (s) => clearTrips(s),
   settings: (s, op) => updateSettings(s, op.patch)
 };
@@ -64,6 +65,7 @@ async function api(method, path, body) {
 const REQUESTS = {
   add: (op) => api('POST', '/api/trips', { at: op.at }),
   remove: () => api('DELETE', '/api/trips/last'),
+  removeAt: (op) => api('DELETE', '/api/trips/one', { at: op.at }),
   clear: () => api('DELETE', '/api/trips'),
   settings: (op) => api('PUT', '/api/settings', op.patch)
 };
@@ -153,6 +155,7 @@ const ui = {
   cardPerTrip: el('card-per-trip'), cardPerTripSub: el('card-per-trip-sub'),
   delta: el('delta'), deltaSub: el('delta-sub'),
   sync: el('sync'), syncText: el('sync-text'),
+  historyToggle: el('history-toggle'), historyBody: el('history-body'), historySummary: el('history-summary'),
   settings: el('settings'), settingsToggle: el('settings-toggle'),
   inMembership: el('in-membership'), inCardPrice: el('in-card-price'), inCardTrips: el('in-card-trips'),
   exportBtn: el('export'), resetBtn: el('reset')
@@ -169,8 +172,82 @@ function setStatus(next) {
   status = next;
   ui.sync.dataset.status = next;
   ui.syncText.textContent = queue.length && next !== 'synced'
-    ? `${STATUS_TEXT[next]} (${plural(queue.length, 'tap')} pending)`
+    ? `${STATUS_TEXT[next]} (${plural(queue.length, 'change')} pending)`
     : STATUS_TEXT[next];
+}
+
+/* ---------- history ---------- */
+
+const monthKey = (d) => `${d.getFullYear()}-${d.getMonth()}`;
+const monthName = (d) => d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+const dayName = (d) => d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+const timeName = (d) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+let historySig = null;
+
+/* Rebuilt only when the trips actually change — render() also runs on every
+   poll, and throwing the list away mid-scroll would yank it under the reader. */
+function renderHistory(trips) {
+  ui.historySummary.textContent = trips.length
+    ? `${plural(trips.length, 'trip')} · last ${formatDate(trips[trips.length - 1])}`
+    : 'Nothing logged yet';
+
+  const sig = trips.join('|');
+  if (ui.historyBody.hidden || sig === historySig) return;
+  historySig = sig;
+
+  if (!trips.length) {
+    ui.historyBody.innerHTML = '<p class="history-empty">No trips yet. Tap + after your next swim.</p>';
+    return;
+  }
+
+  // Group by local month. The stored timestamps are UTC, so an evening swim
+  // would land in the wrong month if we sliced the ISO string instead.
+  const frag = document.createDocumentFragment();
+  let openMonth = null;
+
+  trips.forEach((iso, i) => {
+    const d = new Date(iso);
+    const key = monthKey(d);
+    if (key !== openMonth) {
+      openMonth = key;
+      const head = document.createElement('div');
+      head.className = 'month';
+      const n = trips.filter((t) => monthKey(new Date(t)) === key).length;
+      head.innerHTML = `<span></span><span class="month-count"></span>`;
+      head.firstChild.textContent = monthName(d);
+      head.lastChild.textContent = plural(n, 'trip');
+      frag.append(head);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'trip-row';
+    row.innerHTML = `<span class="n"></span><span class="when"><span class="date"></span><span class="time"></span></span>` +
+                    `<button class="row-del" type="button">×</button>`;
+    row.querySelector('.n').textContent = `#${i + 1}`;
+    row.querySelector('.date').textContent = dayName(d);
+    row.querySelector('.time').textContent = timeName(d);
+    const del = row.querySelector('.row-del');
+    del.dataset.at = iso;
+    del.setAttribute('aria-label', `Remove trip on ${dayName(d)}`);
+    frag.append(row);
+  });
+
+  // Newest first, but numbered in the order they happened.
+  const rows = [...frag.children];
+  ui.historyBody.replaceChildren();
+  ui.historyBody.append(...reverseKeepingMonths(rows));
+}
+
+/* Reverses the flat list back into newest-first order while keeping each month
+   heading above its own trips. */
+function reverseKeepingMonths(nodes) {
+  const groups = [];
+  for (const node of nodes) {
+    if (node.classList.contains('month')) groups.push([node]);
+    else groups[groups.length - 1].push(node);
+  }
+  return groups.reverse().flatMap(([head, ...rows]) => [head, ...rows.reverse()]);
 }
 
 /* ---------- render ---------- */
@@ -219,6 +296,8 @@ function render() {
   ui.delta.classList.toggle('is-bad', delta < 0);
   ui.deltaSub.textContent = delta >= 0 ? 'saved vs cards' : 'still to earn back';
 
+  renderHistory(state.trips);
+
   if (document.activeElement !== ui.inMembership) ui.inMembership.value = s.membership;
   if (document.activeElement !== ui.inCardPrice) ui.inCardPrice.value = s.cardPrice;
   if (document.activeElement !== ui.inCardTrips) ui.inCardTrips.value = s.cardTrips;
@@ -237,6 +316,19 @@ document.addEventListener('keydown', (e) => {
   if (e.target.matches('input')) return;
   if (e.key === '+' || e.key === '=' || e.key === 'ArrowUp') { ui.plus.click(); e.preventDefault(); }
   if (e.key === '-' || e.key === 'ArrowDown') { ui.minus.click(); e.preventDefault(); }
+});
+
+ui.historyToggle.addEventListener('click', () => {
+  const open = ui.historyBody.hidden;
+  ui.historyBody.hidden = !open;
+  ui.historyToggle.setAttribute('aria-expanded', String(open));
+  if (open) { historySig = null; render(); }     // build the list on first open
+});
+
+ui.historyBody.addEventListener('click', (e) => {
+  const btn = e.target.closest('.row-del');
+  if (!btn) return;
+  enqueue({ kind: 'removeAt', at: btn.dataset.at });
 });
 
 ui.settingsToggle.addEventListener('click', () => {
