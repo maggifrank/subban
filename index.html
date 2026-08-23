@@ -67,7 +67,17 @@
       <span id="history-summary" class="sub"></span>
       <span class="chev" aria-hidden="true">▾</span>
     </button>
-    <div id="history-body" hidden></div>
+    <div id="history-panel" hidden>
+      <form id="backdate" class="backdate">
+        <label for="backdate-date">Log a past swim</label>
+        <div class="backdate-row">
+          <input id="backdate-date" type="date" required>
+          <button type="submit" class="ghost-btn">Add</button>
+        </div>
+        <p id="backdate-error" class="backdate-error" hidden></p>
+      </form>
+      <div id="history-body"></div>
+    </div>
   </section>
 
   <section id="settings" class="card settings" hidden>

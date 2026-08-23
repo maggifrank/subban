@@ -17,7 +17,8 @@ const POLL_MS = 15000;
 let confirmed = emptyState();
 let queue = [];
 let token = localStorage.getItem(TOKEN_KEY) || '';
-let status = 'syncing';   // syncing | synced | offline | locked
+let status = 'syncing';   // syncing | synced | offline | locked | error
+let lastError = '';
 let flushing = false;
 
 /* ---------- cache (offline fallback only, never the source of truth) ---------- */
@@ -58,6 +59,12 @@ async function api(method, path, body) {
     body: body ? JSON.stringify(body) : undefined
   });
   if (res.status === 401) throw Object.assign(new Error('locked'), { locked: true });
+  if (res.status >= 400 && res.status < 500) {
+    // The server will refuse this one however often we ask. Retrying it would
+    // jam the queue and every change behind it, so mark it as fatal.
+    const detail = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(detail.error || `Rejected (${res.status})`), { fatal: true });
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -80,12 +87,22 @@ async function flush() {
   try {
     while (queue.length) {
       const op = queue[0];
-      confirmed = normalize(await REQUESTS[op.kind](op));
+      try {
+        confirmed = normalize(await REQUESTS[op.kind](op));
+      } catch (err) {
+        if (!err.fatal) throw err;
+        queue.shift();          // drop it and keep going, rather than jam
+        saveCache();
+        lastError = err.message;
+        setStatus('error');
+        render();
+        continue;
+      }
       queue.shift();
       saveCache();
       render();
     }
-    setStatus('synced');
+    if (status !== 'error') setStatus('synced');
   } catch (err) {
     setStatus(err.locked ? 'locked' : 'offline');
     if (err.locked) askForToken();
@@ -155,7 +172,9 @@ const ui = {
   cardPerTrip: el('card-per-trip'), cardPerTripSub: el('card-per-trip-sub'),
   delta: el('delta'), deltaSub: el('delta-sub'),
   sync: el('sync'), syncText: el('sync-text'),
-  historyToggle: el('history-toggle'), historyBody: el('history-body'), historySummary: el('history-summary'),
+  historyToggle: el('history-toggle'), historyPanel: el('history-panel'), historyBody: el('history-body'),
+  historySummary: el('history-summary'),
+  backdate: el('backdate'), backdateDate: el('backdate-date'), backdateError: el('backdate-error'),
   settings: el('settings'), settingsToggle: el('settings-toggle'),
   inMembership: el('in-membership'), inCardPrice: el('in-card-price'), inCardTrips: el('in-card-trips'),
   exportBtn: el('export'), resetBtn: el('reset')
@@ -165,12 +184,17 @@ const STATUS_TEXT = {
   syncing: 'Syncing…',
   synced: 'Synced',
   offline: 'Offline — will sync later',
-  locked: 'Access code needed'
+  locked: 'Access code needed',
+  error: 'Change rejected'
 };
 
 function setStatus(next) {
   status = next;
   ui.sync.dataset.status = next;
+  if (next === 'error') {
+    ui.syncText.textContent = lastError || STATUS_TEXT.error;
+    return;
+  }
   ui.syncText.textContent = queue.length && next !== 'synced'
     ? `${STATUS_TEXT[next]} (${plural(queue.length, 'change')} pending)`
     : STATUS_TEXT[next];
@@ -183,6 +207,12 @@ const monthName = (d) => d.toLocaleDateString(undefined, { month: 'long', year: 
 const dayName = (d) => d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 const timeName = (d) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
+/* Backdated trips are anchored at exactly local noon, so showing a time would
+   claim a precision the entry doesn't have. Live taps never land on the
+   millisecond. */
+const isBackdated = (d) =>
+  d.getHours() === 12 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0;
+
 let historySig = null;
 
 /* Rebuilt only when the trips actually change — render() also runs on every
@@ -193,7 +223,7 @@ function renderHistory(trips) {
     : 'Nothing logged yet';
 
   const sig = trips.join('|');
-  if (ui.historyBody.hidden || sig === historySig) return;
+  if (ui.historyPanel.hidden || sig === historySig) return;
   historySig = sig;
 
   if (!trips.length) {
@@ -226,7 +256,7 @@ function renderHistory(trips) {
                     `<button class="row-del" type="button">×</button>`;
     row.querySelector('.n').textContent = `#${i + 1}`;
     row.querySelector('.date').textContent = dayName(d);
-    row.querySelector('.time').textContent = timeName(d);
+    row.querySelector('.time').textContent = isBackdated(d) ? '' : timeName(d);
     const del = row.querySelector('.row-del');
     del.dataset.at = iso;
     del.setAttribute('aria-label', `Remove trip on ${dayName(d)}`);
@@ -319,11 +349,41 @@ document.addEventListener('keydown', (e) => {
 });
 
 ui.historyToggle.addEventListener('click', () => {
-  const open = ui.historyBody.hidden;
-  ui.historyBody.hidden = !open;
+  const open = ui.historyPanel.hidden;
+  ui.historyPanel.hidden = !open;
   ui.historyToggle.setAttribute('aria-expanded', String(open));
   if (open) { historySig = null; render(); }     // build the list on first open
 });
+
+/* Today in the local timezone, as the yyyy-mm-dd a date input expects. */
+function todayISODate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+ui.backdateDate.max = todayISODate();
+
+ui.backdate.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const value = ui.backdateDate.value;          // "2026-08-18"
+  const [y, m, d] = value.split('-').map(Number);
+  if (!y || !m || !d) return showBackdateError('Pick a date first.');
+
+  /* Anchored at local midday. Midnight round-trips fine in the timezone that
+     logged it, but stored as 00:00Z it reads as the *previous day* on a device
+     anywhere west of UTC. Midday leaves ~12 hours of slack either way. */
+  const when = new Date(y, m - 1, d, 12, 0, 0, 0);
+  if (when > new Date()) return showBackdateError("That's in the future.");
+
+  showBackdateError(null);
+  ui.backdateDate.value = '';
+  enqueue({ kind: 'add', at: when.toISOString() });
+});
+
+function showBackdateError(msg) {
+  ui.backdateError.textContent = msg || '';
+  ui.backdateError.hidden = !msg;
+}
 
 ui.historyBody.addEventListener('click', (e) => {
   const btn = e.target.closest('.row-del');
@@ -365,7 +425,11 @@ ui.exportBtn.addEventListener('click', () => {
   URL.revokeObjectURL(a.href);
 });
 
-ui.sync.addEventListener('click', () => (queue.length ? flush() : poll({ force: true })));
+ui.sync.addEventListener('click', () => {
+  lastError = '';
+  if (status === 'error') setStatus('syncing');
+  queue.length ? flush() : poll({ force: true });
+});
 
 function askForToken() {
   const entered = prompt('Access code for this Sund server:', '');
@@ -379,6 +443,11 @@ function askForToken() {
 
 loadCache();
 render();
+/* flush() first: anything logged offline before the app was last closed is
+   still in the queue, and poll() defers to a non-empty queue rather than
+   overwriting it. flush() marks itself busy synchronously, so poll() then
+   waits its turn instead of racing. */
+flush();
 poll({ force: true });
 
 setInterval(poll, POLL_MS);

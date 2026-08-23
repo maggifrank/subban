@@ -43,6 +43,15 @@ device does the right thing even if the other device added one meanwhile. A
 delete that has already been applied is a no-op rather than an error, so a queued
 offline delete can't remove two trips if it gets retried.
 
+**Log a past swim** at the top of the panel backdates a trip you forgot to
+record. Future dates are refused, by the date picker and again by the server.
+
+Backdated trips are stored at local **midday**, not midnight. Midnight would
+round-trip correctly on the device that logged it, but stored as `00:00Z` it
+reads as the previous day on any device west of UTC; midday leaves twelve hours
+of slack either way. Since a backdated entry has no real clock time, the history
+shows it as a date alone — only live taps display a time.
+
 ## How syncing works
 
 Taps apply **instantly** and sync in the background, so the app stays usable on
@@ -63,7 +72,7 @@ touch a few times a week, polling is less to go wrong.
 | | |
 |---|---|
 | `GET /api/state` | full state — trips, settings, `rev` |
-| `POST /api/trips` | log a swim |
+| `POST /api/trips` | log a swim — optional `{ at }` to backdate |
 | `DELETE /api/trips/last` | undo the last one |
 | `DELETE /api/trips/one` | remove one trip by timestamp (`{ at }`) |
 | `DELETE /api/trips` | clear the season |
@@ -134,9 +143,10 @@ your count, and is a shared code rather than real per-user accounts.
 - **On Netlify, the blob read-modify-write isn't transactional.** Two swims
   logged in the same instant from different devices could theoretically collapse
   into one. The LXC backend serializes writes and doesn't have this problem.
-- **No backdating.** Trips are stamped with the moment you tap +. If you forget
-  to log a swim, you can add one now and the date will be wrong; there's no way
-  to enter last Tuesday.
+- **Backdating is date-only.** You can log that you swam last Tuesday, but not
+  that it was at 7am. The entry is stored at midday and displayed without a time.
+- **No membership start date.** The app counts trips, not the year they belong
+  to. When the membership renews, use **Reset trips** to start the new season.
 
 ## Files
 
