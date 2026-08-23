@@ -6,17 +6,20 @@ import {
   emptyState, normalize, addTrip, removeLastTrip, removeTripAt, clearTrips, updateSettings,
   costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips
 } from './lib/state.js';
+import {
+  LANGS, DEFAULT_LANG, detectLang, t, plural, kr, ordinal, formatDate, formatTime
+} from './lib/i18n.js';
 
 const CACHE_KEY = 'sund.cache.v2';
 const TOKEN_KEY = 'sund.token';
+const LANG_KEY = 'sund.lang';
 const POLL_MS = 15000;
+const CHART_MONTHS = 12;
 
-/* `confirmed` is the last state the server acknowledged. `queue` holds taps it
-   hasn't accepted yet. What we render is confirmed + queue, so the number moves
-   the instant you tap and still converges on whatever the server says. */
 let confirmed = emptyState();
 let queue = [];
 let token = localStorage.getItem(TOKEN_KEY) || '';
+let lang = detectLang();
 let status = 'syncing';   // syncing | synced | offline | locked | error
 let lastError = '';
 let flushing = false;
@@ -77,9 +80,6 @@ const REQUESTS = {
   settings: (op) => api('PUT', '/api/settings', op.patch)
 };
 
-/* Send queued taps oldest-first. Each one is a delta, so if the other device
-   logged a swim meanwhile the server ends up with both, not one overwriting
-   the other. */
 async function flush() {
   if (flushing || !queue.length) return;
   flushing = true;
@@ -119,10 +119,6 @@ function enqueue(op) {
   flush();
 }
 
-/* Pull in changes made on other devices. Skipped while taps are pending, so a
-   poll can't undo a number the user is looking at, and skipped for background
-   tabs — except `force`, used on load and when a tab comes back to the front,
-   where the whole point is to refresh before anyone reads the number. */
 async function poll({ force = false } = {}) {
   if (queue.length || flushing) return;
   if (document.hidden && !force) return;
@@ -141,37 +137,18 @@ async function poll({ force = false } = {}) {
   }
 }
 
-/* ---------- formatting ---------- */
-
-// Icelandic grouping (36.400) written out by hand — browsers in the LXC may not
-// ship is-IS locale data, and Intl silently falls back to en-US commas.
-const group = (n) => String(Math.abs(Math.round(n))).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-const kr = (v) => `${group(v)} kr`;
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
-function formatDate(iso) {
-  const d = new Date(iso);
-  return isNaN(d) ? '' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function nth(k) {
-  const t = k % 10, h = k % 100;
-  if (t === 1 && h !== 11) return 'st';
-  if (t === 2 && h !== 12) return 'nd';
-  if (t === 3 && h !== 13) return 'rd';
-  return 'th';
-}
-
 /* ---------- elements ---------- */
 
 const el = (id) => document.getElementById(id);
 const ui = {
   trips: el('trips'), lastSwim: el('last-swim'), plus: el('plus'), minus: el('minus'),
+  beLabel: el('be-label'),
   costPerTrip: el('cost-per-trip'), costPerTripSub: el('cost-per-trip-sub'),
   progressFill: el('progress-fill'), breakevenLine: el('breakeven-line'), breakevenNote: el('breakeven-note'),
   cardPerTrip: el('card-per-trip'), cardPerTripSub: el('card-per-trip-sub'),
   delta: el('delta'), deltaSub: el('delta-sub'),
-  sync: el('sync'), syncText: el('sync-text'),
+  sync: el('sync'), syncText: el('sync-text'), langToggle: el('lang-toggle'),
+  chart: el('chart'),
   historyToggle: el('history-toggle'), historyPanel: el('history-panel'), historyBody: el('history-body'),
   historySummary: el('history-summary'),
   backdate: el('backdate'), backdateDate: el('backdate-date'), backdateError: el('backdate-error'),
@@ -180,59 +157,208 @@ const ui = {
   exportBtn: el('export'), resetBtn: el('reset')
 };
 
-const STATUS_TEXT = {
-  syncing: 'Syncing…',
-  synced: 'Synced',
-  offline: 'Offline — will sync later',
-  locked: 'Access code needed',
-  error: 'Change rejected'
-};
+/* ---------- language ---------- */
+
+/* Fills every element carrying a data-i18n hook. Called on load and on switch,
+   so no string is duplicated between the markup and here. */
+function applyStaticStrings() {
+  document.documentElement.lang = lang;
+  for (const node of document.querySelectorAll('[data-i18n]')) {
+    node.textContent = t(lang, node.dataset.i18n);
+  }
+  for (const node of document.querySelectorAll('[data-i18n-aria]')) {
+    node.setAttribute('aria-label', t(lang, node.dataset.i18nAria));
+  }
+  for (const node of document.querySelectorAll('[data-i18n-title]')) {
+    node.setAttribute('title', t(lang, node.dataset.i18nTitle));
+  }
+}
+
+function setLang(next) {
+  if (!LANGS.includes(next)) return;
+  lang = next;
+  localStorage.setItem(LANG_KEY, lang);
+  applyStaticStrings();
+  historySig = null;        // month names and plurals changed; force a rebuild
+  chartSig = null;
+  render();
+}
+
+/* ---------- status pill ---------- */
 
 function setStatus(next) {
   status = next;
   ui.sync.dataset.status = next;
   if (next === 'error') {
-    ui.syncText.textContent = lastError || STATUS_TEXT.error;
+    ui.syncText.textContent = lastError || t(lang, 'sync.error');
     return;
   }
+  const base = t(lang, `sync.${next}`);
   ui.syncText.textContent = queue.length && next !== 'synced'
-    ? `${STATUS_TEXT[next]} (${plural(queue.length, 'change')} pending)`
-    : STATUS_TEXT[next];
+    ? t(lang, 'sync.pending', { status: base, changes: plural(lang, queue.length, 'change') })
+    : base;
+}
+
+/* ---------- chart: trips per month ---------- */
+
+const monthKey = (d) => `${d.getFullYear()}-${d.getMonth()}`;
+
+/* Every month from the first trip to now, including the empty ones — a gap in
+   the swimming is part of the story, and dropping those months would space the
+   bars evenly and misstate the timeline. */
+function monthlySeries(trips, limit = CHART_MONTHS) {
+  if (!trips.length) return [];
+  const counts = new Map();
+  for (const iso of trips) {
+    const k = monthKey(new Date(iso));
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  const first = new Date(trips[0]);
+  const now = new Date();
+  const out = [];
+  const cursor = new Date(first.getFullYear(), first.getMonth(), 1);
+  const endY = now.getFullYear(), endM = now.getMonth();
+  while (cursor.getFullYear() < endY || (cursor.getFullYear() === endY && cursor.getMonth() <= endM)) {
+    out.push({ date: new Date(cursor), count: counts.get(monthKey(cursor)) || 0 });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return out.slice(-limit);
+}
+
+/* Round the axis up to a clean number so the ticks read 0/2/4 rather than 0/3/7. */
+function axisTicks(max) {
+  const step = max <= 4 ? 1 : max <= 8 ? 2 : max <= 20 ? 5 : 10;
+  const top = Math.max(step, Math.ceil(max / step) * step);
+  const ticks = [];
+  for (let v = 0; v <= top; v += step) ticks.push(v);
+  return { top, ticks };
+}
+
+const svgEsc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/* Column with a 4px rounded cap and a square foot on the baseline. */
+function barPath(x, y, w, h) {
+  const r = Math.min(4, h, w / 2);
+  if (h <= 0) return '';
+  return `M${x},${y + h}V${y + r}a${r},${r} 0 0 1 ${r},-${r}h${w - 2 * r}a${r},${r} 0 0 1 ${r},${r}V${y + h}Z`;
+}
+
+let chartSig = null;
+
+function renderChart(trips) {
+  const series = monthlySeries(trips);
+  const sig = lang + '|' + series.map((m) => monthKey(m.date) + ':' + m.count).join(',');
+  if (sig === chartSig) return;
+  chartSig = sig;
+
+  if (!series.length) {
+    ui.chart.innerHTML = `<p class="chart-empty">${svgEsc(t(lang, 'chart.empty'))}</p>`;
+    return;
+  }
+
+  const W = 320, H = 168;
+  const PAD = { top: 14, right: 4, bottom: 22, left: 24 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  const { top, ticks } = axisTicks(Math.max(...series.map((m) => m.count), 1));
+  const band = plotW / series.length;
+  // 2px of surface between neighbours does the separating; never a stroke.
+  const barW = Math.min(24, Math.max(3, band - 2));
+  const yOf = (v) => PAD.top + plotH * (1 - v / top);
+
+  const peak = series.reduce((best, m, i) => (m.count > series[best].count ? i : best), 0);
+  /* Thin by measured band width, not by month count: 12 months still leaves
+     ~24 units per band, which fits a three-letter month at 9px. */
+  const labelEvery = band >= 20 ? 1 : band >= 13 ? 2 : 3;
+
+  const parts = [];
+
+  for (const v of ticks) {
+    const y = yOf(v);
+    parts.push(`<line class="gridline" x1="${PAD.left}" y1="${y}" x2="${W - PAD.right}" y2="${y}"/>`);
+    parts.push(`<text class="axis-text" x="${PAD.left - 5}" y="${y + 3}" text-anchor="end">${v}</text>`);
+  }
+
+  series.forEach((m, i) => {
+    const cx = PAD.left + band * i + band / 2;
+    const h = plotH * (m.count / top);
+    const y = yOf(m.count);
+    if (m.count > 0) {
+      parts.push(`<path class="bar" d="${barPath(cx - barW / 2, y, barW, h)}"/>`);
+    }
+    // Label the peak only — a number on every column is noise.
+    if (i === peak && m.count > 0) {
+      parts.push(`<text class="bar-label" x="${cx}" y="${y - 5}" text-anchor="middle">${m.count}</text>`);
+    }
+    if (i % labelEvery === 0 || i === series.length - 1) {
+      parts.push(`<text class="axis-text" x="${cx}" y="${H - 7}" text-anchor="middle">${svgEsc(formatDate(lang, m.date, 'short'))}</text>`);
+    }
+    const tip = t(lang, 'chart.tooltip', {
+      month: formatDate(lang, m.date, 'month'),
+      trips: plural(lang, m.count, 'trip')
+    });
+    parts.push(
+      /* No tabindex: focus events don't fire reliably on SVG shapes, so a tab
+         stop here would land with no tooltip. role + title still expose the
+         value to assistive tech, and the history panel is the table view. */
+      `<rect class="hit" x="${PAD.left + band * i}" y="${PAD.top}" width="${band}" height="${plotH}" ` +
+      `data-tip="${svgEsc(tip)}" data-cx="${cx}" data-cy="${y}" role="img" aria-label="${svgEsc(tip)}">` +
+      `<title>${svgEsc(tip)}</title></rect>`
+    );
+  });
+
+  ui.chart.innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${svgEsc(t(lang, 'chart.label'))}">${parts.join('')}</svg>` +
+    `<div class="chart-tip" id="chart-tip"></div>`;
+}
+
+/* Hover on a pointer, tap on a phone — the hit rects span the full plot height
+   so the target is never the width of a thin bar. */
+function bindChartTooltip() {
+  const show = (e) => {
+    const hit = e.target.closest('.hit');
+    const tip = el('chart-tip');
+    if (!hit || !tip) return;
+    const box = ui.chart.getBoundingClientRect();
+    const svg = ui.chart.querySelector('svg').getBoundingClientRect();
+    const scale = svg.width / 320;
+    tip.textContent = hit.dataset.tip;
+    tip.style.left = `${Number(hit.dataset.cx) * scale}px`;
+    tip.style.top = `${Number(hit.dataset.cy) * scale + (svg.top - box.top)}px`;
+    tip.dataset.show = '1';
+  };
+  const hide = () => { const tip = el('chart-tip'); if (tip) tip.dataset.show = '0'; };
+
+  ui.chart.addEventListener('pointerover', show);
+  ui.chart.addEventListener('pointermove', show);
+  ui.chart.addEventListener('pointerleave', hide);
 }
 
 /* ---------- history ---------- */
 
-const monthKey = (d) => `${d.getFullYear()}-${d.getMonth()}`;
-const monthName = (d) => d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-const dayName = (d) => d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
-const timeName = (d) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-
-/* Backdated trips are anchored at exactly local noon, so showing a time would
-   claim a precision the entry doesn't have. Live taps never land on the
-   millisecond. */
 const isBackdated = (d) =>
   d.getHours() === 12 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0;
 
 let historySig = null;
 
-/* Rebuilt only when the trips actually change — render() also runs on every
-   poll, and throwing the list away mid-scroll would yank it under the reader. */
 function renderHistory(trips) {
   ui.historySummary.textContent = trips.length
-    ? `${plural(trips.length, 'trip')} · last ${formatDate(trips[trips.length - 1])}`
-    : 'Nothing logged yet';
+    ? t(lang, 'history.summary', {
+        trips: plural(lang, trips.length, 'trip'),
+        date: formatDate(lang, trips[trips.length - 1], 'full')
+      })
+    : t(lang, 'history.none');
 
-  const sig = trips.join('|');
+  const sig = lang + '|' + trips.join('|');
   if (ui.historyPanel.hidden || sig === historySig) return;
   historySig = sig;
 
   if (!trips.length) {
-    ui.historyBody.innerHTML = '<p class="history-empty">No trips yet. Tap + after your next swim.</p>';
+    ui.historyBody.innerHTML = `<p class="history-empty">${t(lang, 'history.empty')}</p>`;
     return;
   }
 
-  // Group by local month. The stored timestamps are UTC, so an evening swim
-  // would land in the wrong month if we sliced the ISO string instead.
   const frag = document.createDocumentFragment();
   let openMonth = null;
 
@@ -243,10 +369,10 @@ function renderHistory(trips) {
       openMonth = key;
       const head = document.createElement('div');
       head.className = 'month';
-      const n = trips.filter((t) => monthKey(new Date(t)) === key).length;
+      const n = trips.filter((x) => monthKey(new Date(x)) === key).length;
       head.innerHTML = `<span></span><span class="month-count"></span>`;
-      head.firstChild.textContent = monthName(d);
-      head.lastChild.textContent = plural(n, 'trip');
+      head.firstChild.textContent = formatDate(lang, d, 'month');
+      head.lastChild.textContent = plural(lang, n, 'trip');
       frag.append(head);
     }
 
@@ -255,22 +381,19 @@ function renderHistory(trips) {
     row.innerHTML = `<span class="n"></span><span class="when"><span class="date"></span><span class="time"></span></span>` +
                     `<button class="row-del" type="button">×</button>`;
     row.querySelector('.n').textContent = `#${i + 1}`;
-    row.querySelector('.date').textContent = dayName(d);
-    row.querySelector('.time').textContent = isBackdated(d) ? '' : timeName(d);
+    row.querySelector('.date').textContent = formatDate(lang, d, 'day');
+    row.querySelector('.time').textContent = isBackdated(d) ? '' : formatTime(d);
     const del = row.querySelector('.row-del');
     del.dataset.at = iso;
-    del.setAttribute('aria-label', `Remove trip on ${dayName(d)}`);
+    del.setAttribute('aria-label', t(lang, 'history.removeAria', { date: formatDate(lang, d, 'day') }));
     frag.append(row);
   });
 
-  // Newest first, but numbered in the order they happened.
   const rows = [...frag.children];
   ui.historyBody.replaceChildren();
   ui.historyBody.append(...reverseKeepingMonths(rows));
 }
 
-/* Reverses the flat list back into newest-first order while keeping each month
-   heading above its own trips. */
 function reverseKeepingMonths(nodes) {
   const groups = [];
   for (const node of nodes) {
@@ -293,39 +416,45 @@ function render() {
 
   ui.trips.textContent = n;
   ui.minus.disabled = n === 0;
-  ui.lastSwim.textContent = n ? `Last swim ${formatDate(state.trips[n - 1])}` : 'No trips logged yet';
+  ui.lastSwim.textContent = n
+    ? t(lang, 'counter.lastSwim', { date: formatDate(lang, state.trips[n - 1], 'full') })
+    : t(lang, 'counter.none');
 
   const cpt = costPerTrip(s, n);
-  ui.costPerTrip.textContent = cpt === null ? '—' : kr(cpt);
+  ui.costPerTrip.textContent = cpt === null ? '—' : kr(lang, cpt);
   ui.costPerTrip.classList.toggle('is-empty', cpt === null);
   ui.costPerTripSub.textContent = cpt === null
-    ? `${kr(s.membership)} membership, not used yet`
-    : `${kr(s.membership)} ÷ ${plural(n, 'trip')}`;
+    ? t(lang, 'cost.unused', { total: kr(lang, s.membership) })
+    : t(lang, 'cost.sub', { total: kr(lang, s.membership), trips: plural(lang, n, 'trip') });
 
+  ui.beLabel.textContent = t(lang, 'be.label', { n: s.cardTrips });
   ui.progressFill.style.width = `${Math.min(100, (n / be) * 100)}%`;
   if (n >= be) {
     ui.breakevenLine.textContent = n === be
-      ? 'Broken even exactly — the next trip is free'
-      : `Broken even — ${plural(n - be, 'trip')} of pure profit`;
+      ? t(lang, 'be.exact')
+      : t(lang, 'be.past', { trips: plural(lang, n - be, 'trip') });
   } else {
     ui.breakevenLine.textContent = n === 0
-      ? `${plural(be, 'trip')} to break even`
-      : `${plural(be - n, 'trip')} to go — ${be} in total`;
+      ? t(lang, 'be.start', { trips: plural(lang, be, 'trip') })
+      : t(lang, 'be.toGo', { left: plural(lang, be - n, 'trip'), total: be });
   }
-  ui.breakevenNote.textContent =
-    `A ${s.cardTrips}-trip card works out at ${kr(perCardTrip)} per trip, so the membership pays for ` +
-    `itself at ${be} trips. Counting whole cards actually bought, you'd have overpaid from trip ${cashBe} ` +
-    `(that's when a ${cards}${nth(cards)} card is needed).`;
+  ui.breakevenNote.textContent = t(lang, 'be.note', {
+    cardTrips: s.cardTrips, perTrip: kr(lang, perCardTrip), be, cashBe,
+    cards: lang === 'is' ? cards : ordinal(lang, cards)
+  });
 
-  ui.cardPerTrip.textContent = kr(perCardTrip);
-  ui.cardPerTripSub.textContent = `${kr(s.cardPrice)} ÷ ${s.cardTrips} trips`;
+  ui.cardPerTrip.textContent = kr(lang, perCardTrip);
+  ui.cardPerTripSub.textContent = t(lang, 'stat.cardPerTripSub', {
+    price: kr(lang, s.cardPrice), trips: plural(lang, s.cardTrips, 'trip')
+  });
 
   const delta = perCardTrip * n - s.membership;
-  ui.delta.textContent = (delta >= 0 ? '+' : '−') + kr(Math.abs(delta));
+  ui.delta.textContent = (delta >= 0 ? '+' : '−') + kr(lang, Math.abs(delta));
   ui.delta.classList.toggle('is-good', delta >= 0);
   ui.delta.classList.toggle('is-bad', delta < 0);
-  ui.deltaSub.textContent = delta >= 0 ? 'saved vs cards' : 'still to earn back';
+  ui.deltaSub.textContent = delta >= 0 ? t(lang, 'stat.saved') : t(lang, 'stat.owed');
 
+  renderChart(state.trips);
   renderHistory(state.trips);
 
   if (document.activeElement !== ui.inMembership) ui.inMembership.value = s.membership;
@@ -348,14 +477,15 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '-' || e.key === 'ArrowDown') { ui.minus.click(); e.preventDefault(); }
 });
 
+ui.langToggle.addEventListener('click', () => setLang(lang === 'is' ? 'en' : 'is'));
+
 ui.historyToggle.addEventListener('click', () => {
   const open = ui.historyPanel.hidden;
   ui.historyPanel.hidden = !open;
   ui.historyToggle.setAttribute('aria-expanded', String(open));
-  if (open) { historySig = null; render(); }     // build the list on first open
+  if (open) { historySig = null; render(); }
 });
 
-/* Today in the local timezone, as the yyyy-mm-dd a date input expects. */
 function todayISODate() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -365,15 +495,14 @@ ui.backdateDate.max = todayISODate();
 
 ui.backdate.addEventListener('submit', (e) => {
   e.preventDefault();
-  const value = ui.backdateDate.value;          // "2026-08-18"
-  const [y, m, d] = value.split('-').map(Number);
-  if (!y || !m || !d) return showBackdateError('Pick a date first.');
+  const [y, m, d] = ui.backdateDate.value.split('-').map(Number);
+  if (!y || !m || !d) return showBackdateError(t(lang, 'backdate.noDate'));
 
   /* Anchored at local midday. Midnight round-trips fine in the timezone that
      logged it, but stored as 00:00Z it reads as the *previous day* on a device
      anywhere west of UTC. Midday leaves ~12 hours of slack either way. */
   const when = new Date(y, m - 1, d, 12, 0, 0, 0);
-  if (when > new Date()) return showBackdateError("That's in the future.");
+  if (when > new Date()) return showBackdateError(t(lang, 'backdate.future'));
 
   showBackdateError(null);
   ui.backdateDate.value = '';
@@ -412,7 +541,7 @@ for (const [input, key, min] of [
 ui.resetBtn.addEventListener('click', () => {
   const n = view().trips.length;
   if (!n) return;
-  if (!confirm(`Delete all ${plural(n, 'trip')} on every device? This cannot be undone.`)) return;
+  if (!confirm(t(lang, 'settings.resetConfirm', { trips: plural(lang, n, 'trip') }))) return;
   enqueue({ kind: 'clear' });
 });
 
@@ -432,7 +561,7 @@ ui.sync.addEventListener('click', () => {
 });
 
 function askForToken() {
-  const entered = prompt('Access code for this Sund server:', '');
+  const entered = prompt(t(lang, 'settings.tokenPrompt'), '');
   if (entered === null) return;
   token = entered.trim();
   localStorage.setItem(TOKEN_KEY, token);
@@ -441,6 +570,8 @@ function askForToken() {
 
 /* ---------- start ---------- */
 
+applyStaticStrings();
+bindChartTooltip();
 loadCache();
 render();
 /* flush() first: anything logged offline before the app was last closed is

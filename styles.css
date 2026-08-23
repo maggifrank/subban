@@ -10,6 +10,12 @@
   --bad: #b4442e;
   --shadow: 0 1px 2px rgba(11, 42, 61, .06), 0 8px 24px rgba(11, 42, 61, .07);
   --radius: 16px;
+  /* Chart mark is its own token, not --accent: it has to sit inside the
+     validator's lightness band against the card surface, which the UI accent
+     does not in dark mode. Both values pass the six checks. */
+  --chart-mark: #0d7ea8;
+  --chart-grid: #e6eef4;
+  --chart-surface: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,6 +30,9 @@
     --good: #4bd39b;
     --bad: #ff8a6b;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .35);
+    --chart-mark: #2f9ac7;
+    --chart-grid: #17384c;
+    --chart-surface: #0e2a3c;
   }
 }
 
@@ -103,7 +112,6 @@ h1 {
 .count {
   font-size: 64px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
   line-height: 1;
   min-width: 2ch;
   text-align: center;
@@ -134,7 +142,6 @@ h1 {
 .hero-value {
   font-size: 40px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
   margin-top: 6px;
   color: var(--accent);
 }
@@ -175,7 +182,6 @@ h1 {
 .stat-value {
   font-size: 22px;
   font-weight: 650;
-  font-variant-numeric: tabular-nums;
   margin-top: 6px;
 }
 .stat-value.is-good { color: var(--good); }
@@ -368,3 +374,39 @@ h1 {
 .backdate .ghost-btn { flex: 0 0 auto; padding: 10px 18px; }
 
 .backdate-error { margin: 0; font-size: 13px; color: var(--bad); }
+
+/* ---- chart ---- */
+
+.chart-card { padding-bottom: 12px; }
+
+.chart {
+  position: relative;
+  margin-top: 10px;
+}
+
+.chart svg { display: block; width: 100%; height: auto; }
+
+.chart-empty { color: var(--ink-dim); font-size: 14px; padding: 18px 0; }
+
+.bar { fill: var(--chart-mark); }
+.gridline { stroke: var(--chart-grid); stroke-width: 1; }
+.axis-text { fill: var(--ink-dim); font-size: 9px; }
+.bar-label { fill: var(--ink); font-size: 10px; font-weight: 600; }
+.hit { fill: transparent; }
+
+.chart-tip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--ink);
+  color: var(--bg-2);
+  font-size: 12px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  white-space: nowrap;
+  transform: translate(-50%, -125%);
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.chart-tip[data-show="1"] { opacity: 1; }
+
+.lang-btn { width: auto; padding: 0 12px; font-size: 13px; }

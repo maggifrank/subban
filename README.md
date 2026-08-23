@@ -30,6 +30,39 @@ you're ahead on money spent, **78** is when you're ahead on value received.
 
 All three numbers are editable under ⚙, and the change syncs like everything else.
 
+## Languages
+
+Icelandic and English, toggled from the header and remembered per device. On a
+first visit the browser's own preference decides, defaulting to Icelandic.
+
+Both languages are complete — labels, the break-even sentence, sync statuses,
+confirm dialogs, month and weekday names, and the chart. Two things that a
+string table alone would get wrong are handled properly:
+
+- **Plurals.** Icelandic takes the singular for any number ending in 1 except 11
+  — *21 ferð* but *11 ferðir*. English is the plain `n === 1`.
+- **Number grouping.** Icelandic groups with dots (36.400), English with commas
+  (36,400).
+
+Dates and numbers are formatted by hand rather than through `Intl`, because the
+browsers this runs in may not ship `is-IS` locale data and `Intl` fails soft — it
+would quietly print Icelandic prices with US commas rather than erroring.
+
+## Trips per month
+
+A column chart above the history panel, one bar per month from your first trip
+to now, capped at the last 12. **Months with no swimming are kept as gaps** — the
+break in the bars is part of the picture, and dropping those months would space
+the remaining bars evenly and misstate the timeline.
+
+One series, so one color and no legend; the peak month is labelled and the rest
+are left to the axis and the tooltip. Hovering or tapping a column gives the
+month and its count. Colors were checked with a palette validator rather than by
+eye: the chart mark is its own token because the UI accent falls outside the
+required lightness band against the dark card surface.
+
+The history panel below is the chart's table view — same data, every trip listed.
+
 ## History
 
 Every trip is timestamped, and the **History** panel lists them newest-first,
@@ -149,6 +182,9 @@ your count, and is a shared code rather than real per-user accounts.
   into one. The LXC backend serializes writes and doesn't have this problem.
 - **Backdating is date-only.** You can log that you swam last Tuesday, but not
   that it was at 7am. The entry is stored at midday and displayed without a time.
+- **The Icelandic is mine, not a native speaker's.** It is grammatical and the
+  plural rules are right, but a few term choices (*núllpunktur*, *fjölnotakort*)
+  are worth a second opinion.
 - **No membership start date.** The app counts trips, not the year they belong
   to. When the membership renews, use **Reset trips** to start the new season.
 
@@ -158,6 +194,7 @@ your count, and is a shared code rather than real per-user accounts.
 |---|---|
 | `index.html` `styles.css` `app.js` | the app |
 | `lib/state.js` `lib/api.js` | domain logic and routing, shared by everything |
+| `lib/i18n.js` | Icelandic and English strings, plurals, date and number formats |
 | `serve.js` | LXC backend — static files + API, file-backed, no dependencies |
 | `netlify/functions/trips.js` | Netlify backend — same API, Blobs-backed |
 | `deploy/sund.service` | systemd unit |
