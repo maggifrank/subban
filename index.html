@@ -14,7 +14,13 @@
 
   <header class="head">
     <h1>Sund</h1>
-    <button id="settings-toggle" class="icon-btn" aria-expanded="false" aria-controls="settings" title="Settings">⚙</button>
+    <div class="head-right">
+      <button id="sync" class="sync" data-status="syncing" title="Sync now">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="sync-text" aria-live="polite">Syncing…</span>
+      </button>
+      <button id="settings-toggle" class="icon-btn" aria-expanded="false" aria-controls="settings" title="Settings">⚙</button>
+    </div>
   </header>
 
   <section class="counter" aria-labelledby="trips-label">
@@ -70,10 +76,10 @@
       <button id="export" class="ghost-btn" type="button">Export data</button>
       <button id="reset" class="danger-btn" type="button">Reset trips</button>
     </div>
-    <p class="note">Saved in this browser only (localStorage).</p>
+    <p class="note">The count is shared: every device pointed at this server sees the same number. Taps made offline sync when you reconnect.</p>
   </section>
 
 </main>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

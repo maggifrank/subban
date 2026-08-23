@@ -3,8 +3,9 @@
 A swim-trip tracker. Tap **+** after each visit and watch the yearly membership
 turn from an expensive mistake into a bargain.
 
-No dependencies, no build step, no backend — three static files and a counter in
-`localStorage`. It runs off a USB stick, an LXC container, or Netlify, unchanged.
+The count is **shared across devices** — log a swim on your phone at the pool,
+see it on your laptop at home. Same tree runs from an LXC container or from
+Netlify, with no code changes.
 
 ## What it works out
 
@@ -27,7 +28,36 @@ not by the trip. You'd buy the 3rd card on trip 61, and only at that point have
 handed over more cash (42.000 kr) than the membership cost. So **61** is when
 you're ahead on money spent, **78** is when you're ahead on value received.
 
-All three numbers are editable under ⚙ if prices change.
+All three numbers are editable under ⚙, and the change syncs like everything else.
+
+## How syncing works
+
+Taps apply **instantly** and sync in the background, so the app stays usable on
+one bar of signal in a changing room. Offline taps queue up in `localStorage`
+and flush when you reconnect — the status pill in the header tells you where
+things stand (`Synced`, `Syncing…`, `Offline — will sync later`).
+
+Operations are sent as **deltas** ("add a trip"), never as "set the count to 11".
+If your phone and laptop each log a swim while out of contact, the server ends up
+with both, instead of one silently overwriting the other.
+
+Other devices' changes arrive on a 15-second poll, plus an immediate refresh
+whenever you open or return to the app. There is no websocket — for a counter you
+touch a few times a week, polling is less to go wrong.
+
+### The API
+
+| | |
+|---|---|
+| `GET /api/state` | full state — trips, settings, `rev` |
+| `POST /api/trips` | log a swim |
+| `DELETE /api/trips/last` | undo the last one |
+| `DELETE /api/trips` | clear the season |
+| `PUT /api/settings` | change the prices |
+
+`lib/state.js` (the domain logic) and `lib/api.js` (the routing) are shared by
+both backends *and* by the browser, so the two deployments can't drift apart and
+the break-even maths exists in exactly one place.
 
 ## Running it locally
 
@@ -35,49 +65,70 @@ All three numbers are editable under ⚙ if prices change.
 node serve.js
 ```
 
-Then open <http://localhost:8080>. Any static server does just as well —
-`python3 -m http.server 8080` or pointing nginx at this directory.
+Then open <http://localhost:8080>. Still no `npm install` needed — `serve.js`
+uses only the Node standard library. The `@netlify/blobs` dependency in
+`package.json` is imported solely by the Netlify function.
+
+State is written to `data/state.json`, or wherever `SUND_DATA` points.
 
 ### In an LXC container
 
 ```bash
 pct exec <ctid> -- bash -c 'apt-get update && apt-get install -y nodejs git'
 pct exec <ctid> -- git clone https://github.com/maggifrank/sund.git /opt/sund
-pct exec <ctid> -- useradd --system --home /opt/sund sund
 pct exec <ctid> -- cp /opt/sund/deploy/sund.service /etc/systemd/system/
 pct exec <ctid> -- systemctl enable --now sund
 ```
 
-It listens on `0.0.0.0:8080`, so it's reachable at the container's IP from
-anywhere on the LAN — including the phone in your swim bag. `git pull &&
+It listens on `0.0.0.0:8080`, so every device on the LAN — including the phone in
+your swim bag — points at the container's IP and shares one count. `git pull &&
 systemctl restart sund` to update.
+
+The unit runs as a `DynamicUser` with `ProtectSystem=strict`, so the app
+directory is read-only and the count lives in `/var/lib/sund/state.json` via
+`StateDirectory`. Back that file up, not the repo.
 
 ## Moving to Netlify later
 
-Nothing to change. `netlify.toml` is already here and publishes the repo root
-with an empty build command:
+`netlify.toml` and `netlify/functions/trips.js` are already here. The function
+serves the same API backed by [Netlify Blobs](https://docs.netlify.com/blobs/overview/)
+instead of a file, and claims `/api/*` through its own `config.path`.
 
 ```bash
 netlify deploy --prod
 ```
 
-Or connect the GitHub repo in the Netlify UI and take the defaults. Because the
-app is pure static files with no server-side anything, the LXC and Netlify
-copies behave identically.
+Or connect the GitHub repo in the Netlify UI and take the defaults — Netlify
+installs `@netlify/blobs` and bundles the function itself.
 
-## A caveat worth knowing
+**Set `SUND_TOKEN` before you do this.** On the LAN an open endpoint is fine; on
+a public URL it means anyone who finds it can edit your swim count.
 
-Trips are stored in `localStorage`, which means **per browser, per device**.
-Counting on your phone and your laptop gives you two separate tallies. For one
-shared count you'd need a backend, which would also end the "deploy it anywhere"
-simplicity — so for now, pick one device and use **Export data** in settings to
-take a JSON backup.
+## The access code
+
+Optional, off by default. Set `SUND_TOKEN` on the server (systemd `Environment=`,
+or Netlify environment variables) and every device will prompt for it once and
+remember it. Without it the API is open to anyone who can reach the port.
+
+Note this guards the API, not the static files — it keeps people from *changing*
+your count, and is a shared code rather than real per-user accounts.
+
+## Known limits
+
+- **Last write wins on settings.** Two devices changing prices in the same second
+  could have one overwrite the other. Trips aren't affected — those are deltas.
+- **On Netlify, the blob read-modify-write isn't transactional.** Two swims
+  logged in the same instant from different devices could theoretically collapse
+  into one. The LXC backend serializes writes and doesn't have this problem.
+- **No history view.** Trips are timestamped and included in the export, but the
+  UI only shows the count and the date of the last swim.
 
 ## Files
 
 | | |
 |---|---|
-| `index.html` `styles.css` `app.js` | the whole app |
-| `serve.js` | zero-dependency static server |
-| `deploy/sund.service` | systemd unit for the LXC |
-| `netlify.toml` | Netlify config, unused until you deploy there |
+| `index.html` `styles.css` `app.js` | the app |
+| `lib/state.js` `lib/api.js` | domain logic and routing, shared by everything |
+| `serve.js` | LXC backend — static files + API, file-backed, no dependencies |
+| `netlify/functions/trips.js` | Netlify backend — same API, Blobs-backed |
+| `deploy/sund.service` | systemd unit |

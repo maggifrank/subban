@@ -1,7 +1,11 @@
-# Sund is a plain static site: no build step, publish the repo root as-is.
+# Sund is a static site plus one function; no build step for the front end.
 [build]
   publish = "."
   command = ""
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
 
 [[headers]]
   for = "/*"
@@ -9,3 +13,8 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "no-referrer"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store"

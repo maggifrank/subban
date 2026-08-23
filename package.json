@@ -1,0 +1,13 @@
+{
+  "name": "sund",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Swim trip tracker with a shared count",
+  "type": "module",
+  "scripts": {
+    "start": "node serve.js"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}

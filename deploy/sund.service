@@ -9,9 +9,14 @@ Type=simple
 WorkingDirectory=/opt/sund
 ExecStart=/usr/bin/node /opt/sund/serve.js
 Environment=PORT=8080
+# StateDirectory creates and owns /var/lib/sund. The app directory itself stays
+# read-only under ProtectSystem=strict, so the shared count must live here.
+StateDirectory=sund
+Environment=SUND_DATA=/var/lib/sund/state.json
+# Uncomment to require an access code; every device is prompted for it once.
+#Environment=SUND_TOKEN=choose-something-long
 Restart=on-failure
-User=sund
-Group=sund
+DynamicUser=true
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
