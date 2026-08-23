@@ -111,6 +111,10 @@ your swim bag — points at the container's IP and shares one count.
 
 The count lives in `/var/lib/sund/state.json`, not in the repo. Back up that file.
 
+Install `deploy/sund-update.timer` as well and the container polls GitHub every
+five minutes, deploying anything you push — with a health check and automatic
+rollback if the new revision won't start. See [DEPLOY.md](DEPLOY.md).
+
 ## Moving to Netlify later
 
 `netlify.toml` and `netlify/functions/trips.js` are already here. The function
@@ -157,4 +161,5 @@ your count, and is a shared code rather than real per-user accounts.
 | `serve.js` | LXC backend — static files + API, file-backed, no dependencies |
 | `netlify/functions/trips.js` | Netlify backend — same API, Blobs-backed |
 | `deploy/sund.service` | systemd unit |
+| `deploy/sund-update.*` | poll GitHub every 5 min, deploy with rollback |
 | `DEPLOY.md` | LXC deployment runbook |

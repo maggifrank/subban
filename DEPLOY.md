@@ -101,9 +101,49 @@ public address.
 
 ## Updating
 
+Manually:
+
 ```
 cd /opt/sund && git pull && systemctl restart sund
 ```
+
+### Automatically
+
+`sund-update.timer` checks GitHub every 5 minutes and deploys anything new.
+Install it once:
+
+```
+cp /opt/sund/deploy/sund-update.service /opt/sund/deploy/sund-update.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now sund-update.timer
+```
+
+From then on, pushing to `main` from your laptop puts the change on the
+container within five minutes. The container polls GitHub rather than GitHub
+pushing to it, so nothing needs to be exposed to the internet.
+
+It only acts when the revision actually changed, so an unchanged check writes
+nothing to the journal. After restarting it fetches `/` until the app answers,
+up to 15 seconds. If it never does, the update is **rolled back** to the
+previous revision and that revision is recorded as failed, so a bad push
+restarts the service once rather than every five minutes forever — push a fix
+and the next run picks it up and clears the mark.
+
+If you have edited files directly in `/opt/sund`, the update refuses to
+fast-forward and leaves both your changes and the running service alone. Commit
+or discard them and it resumes.
+
+Check on it:
+
+```
+systemctl list-timers sund-update.timer
+```
+
+```
+journalctl -u sund-update -n 50 --no-pager
+```
+
+To pause automatic deploys: `systemctl disable --now sund-update.timer`.
 
 ## Backups
 
