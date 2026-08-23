@@ -73,20 +73,20 @@ State is written to `data/state.json`, or wherever `SUND_DATA` points.
 
 ### In an LXC container
 
+Full runbook in **[DEPLOY.md](DEPLOY.md)** — container creation, systemd, access
+codes, backups and troubleshooting. The short version:
+
 ```bash
-pct exec <ctid> -- bash -c 'apt-get update && apt-get install -y nodejs git'
-pct exec <ctid> -- git clone https://github.com/maggifrank/sund.git /opt/sund
-pct exec <ctid> -- cp /opt/sund/deploy/sund.service /etc/systemd/system/
-pct exec <ctid> -- systemctl enable --now sund
+apt-get install -y nodejs git
+git clone https://github.com/maggifrank/sund.git /opt/sund
+cp /opt/sund/deploy/sund.service /etc/systemd/system/
+systemctl enable --now sund
 ```
 
 It listens on `0.0.0.0:8080`, so every device on the LAN — including the phone in
-your swim bag — points at the container's IP and shares one count. `git pull &&
-systemctl restart sund` to update.
+your swim bag — points at the container's IP and shares one count.
 
-The unit runs as a `DynamicUser` with `ProtectSystem=strict`, so the app
-directory is read-only and the count lives in `/var/lib/sund/state.json` via
-`StateDirectory`. Back that file up, not the repo.
+The count lives in `/var/lib/sund/state.json`, not in the repo. Back up that file.
 
 ## Moving to Netlify later
 
@@ -132,3 +132,4 @@ your count, and is a shared code rather than real per-user accounts.
 | `serve.js` | LXC backend — static files + API, file-backed, no dependencies |
 | `netlify/functions/trips.js` | Netlify backend — same API, Blobs-backed |
 | `deploy/sund.service` | systemd unit |
+| `DEPLOY.md` | LXC deployment runbook |
