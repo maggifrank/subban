@@ -1,9 +1,12 @@
 #!/usr/bin/env node
-/* Sund server for the LXC: static files + the shared-count API, backed by a
+/* Subban server for the LXC: static files + the shared-count API, backed by a
    JSON file. Still zero npm dependencies — nothing here needs `npm install`.
 
    Usage: node serve.js [port]
-   Env:   PORT, HOST, SUND_DATA (state file), SUND_TOKEN (optional access code) */
+   Env:   PORT, HOST, SUBBAN_DATA (state file), SUBBAN_TOKEN (optional access code)
+          The SUND_* names are still honoured, so a container still running the
+          pre-rename systemd unit keeps finding its state file instead of
+          silently starting empty. Remove once the unit has been migrated. */
 
 import http from 'node:http';
 import fs from 'node:fs/promises';
@@ -17,8 +20,8 @@ import { emptyRates, refreshThrough } from './lib/rates.js';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.argv[2] || process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
-const DATA = process.env.SUND_DATA || path.join(ROOT, 'data', 'state.json');
-const TOKEN = process.env.SUND_TOKEN || '';
+const DATA = process.env.SUBBAN_DATA || process.env.SUND_DATA || path.join(ROOT, 'data', 'state.json');
+const TOKEN = process.env.SUBBAN_TOKEN || process.env.SUND_TOKEN || '';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -110,7 +113,7 @@ http.createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
   }
 }).listen(PORT, HOST, () => {
-  console.log(`Sund running on http://${HOST}:${PORT}`);
+  console.log(`Subban running on http://${HOST}:${PORT}`);
   console.log(`State file: ${DATA}${fsSync.existsSync(DATA) ? '' : ' (will be created)'}`);
-  console.log(TOKEN ? 'Access code required (SUND_TOKEN set)' : 'Open access — no SUND_TOKEN set');
+  console.log(TOKEN ? 'Access code required (SUBBAN_TOKEN set)' : 'Open access — no SUBBAN_TOKEN set');
 });

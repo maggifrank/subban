@@ -11,7 +11,7 @@ const KEY = 'state';
 const RATES_KEY = 'rates';
 
 // Strong consistency: the phone must see the swim the laptop just logged.
-const blobs = () => getStore({ name: 'sund', consistency: 'strong' });
+const blobs = () => getStore({ name: 'subban', consistency: 'strong' });
 
 const store = {
   async read() {
@@ -55,7 +55,7 @@ export default async (req) => {
 
   const token = (req.headers.get('authorization') || '').replace(/^Bearer /, '');
   const { status, body: out } = await handle(
-    { method: req.method, path: pathname, body, token }, { store, rates }, process.env.SUND_TOKEN || ''
+    { method: req.method, path: pathname, body, token }, { store, rates }, process.env.SUBBAN_TOKEN || process.env.SUND_TOKEN || ''
   );
 
   return Response.json(out, { status, headers: { 'Cache-Control': 'no-store' } });

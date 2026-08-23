@@ -1,13 +1,13 @@
 # Checks for new commits every 5 minutes.
 [Unit]
-Description=Check for Sund updates
+Description=Check for Subban updates
 
 [Timer]
 OnBootSec=2min
 OnUnitActiveSec=5min
 # Spread the check out a little so it isn't hammering GitHub on the dot.
 RandomizedDelaySec=30s
-Unit=sund-update.service
+Unit=subban-update.service
 
 [Install]
 WantedBy=timers.target

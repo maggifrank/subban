@@ -1,6 +1,6 @@
-# Deploying Sund to an LXC container
+# Deploying Subban to an LXC container
 
-Sund needs Node 18+ and nothing else — no `npm install`, no database, no reverse
+Subban needs Node 18+ and nothing else — no `npm install`, no database, no reverse
 proxy. A 512 MB container is generous.
 
 Everything below is identical across LXC flavours once you have a shell in the
@@ -15,7 +15,7 @@ Proxmox:
 
 ```
 pct create 110 local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
-  --hostname sund --cores 1 --memory 512 --rootfs local-lvm:4 \
+  --hostname subban --cores 1 --memory 512 --rootfs local-lvm:4 \
   --net0 name=eth0,bridge=vmbr0,ip=dhcp --unprivileged 1 \
   --features nesting=1 --start 1
 ```
@@ -23,14 +23,14 @@ pct create 110 local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
 LXD / Incus:
 
 ```
-lxc launch images:debian/12 sund
+lxc launch images:debian/12 subban
 ```
 
 ## 2. Get a shell inside
 
 ```
 pct enter 110          # Proxmox
-lxc exec sund -- bash  # LXD / Incus
+lxc exec subban -- bash  # LXD / Incus
 ```
 
 Everything from here runs **inside the container**.
@@ -53,7 +53,7 @@ step 5 to match.
 ## 4. Clone
 
 ```
-git clone https://github.com/maggifrank/sund.git /opt/sund
+git clone https://github.com/maggifrank/subban.git /opt/subban
 ```
 
 The repo is public, so no keys or tokens are needed.
@@ -61,14 +61,14 @@ The repo is public, so no keys or tokens are needed.
 ## 5. Install and start the service
 
 ```
-cp /opt/sund/deploy/sund.service /etc/systemd/system/
+cp /opt/subban/deploy/subban.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now sund
-systemctl status sund --no-pager
+systemctl enable --now subban
+systemctl status subban --no-pager
 ```
 
-The unit runs as a `DynamicUser` with `ProtectSystem=strict`, so `/opt/sund`
-stays read-only and the count is written to `/var/lib/sund/state.json` via
+The unit runs as a `DynamicUser` with `ProtectSystem=strict`, so `/opt/subban`
+stays read-only and the count is written to `/var/lib/subban/state.json` via
 `StateDirectory`.
 
 ## 6. Check it
@@ -85,14 +85,14 @@ the same count, and a swim logged on one appears on the other within 15 seconds 
 immediately if you switch to the app rather than leaving it in the background.
 
 If `curl` works inside the container but nothing else on the LAN can reach it,
-the problem is the host firewall, not Sund.
+the problem is the host firewall, not Subban.
 
 ## 7. Access code (optional on a trusted LAN)
 
-Uncomment and set `SUND_TOKEN` in `/etc/systemd/system/sund.service`:
+Uncomment and set `SUBBAN_TOKEN` in `/etc/systemd/system/subban.service`:
 
 ```
-systemctl daemon-reload && systemctl restart sund
+systemctl daemon-reload && systemctl restart subban
 ```
 
 Each device prompts for the code once and remembers it. Without it, anyone who
@@ -104,18 +104,18 @@ public address.
 Manually:
 
 ```
-cd /opt/sund && git pull && systemctl restart sund
+cd /opt/subban && git pull && systemctl restart subban
 ```
 
 ### Automatically
 
-`sund-update.timer` checks GitHub every 5 minutes and deploys anything new.
+`subban-update.timer` checks GitHub every 5 minutes and deploys anything new.
 Install it once:
 
 ```
-cp /opt/sund/deploy/sund-update.service /opt/sund/deploy/sund-update.timer /etc/systemd/system/
+cp /opt/subban/deploy/subban-update.service /opt/subban/deploy/subban-update.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now sund-update.timer
+systemctl enable --now subban-update.timer
 ```
 
 From then on, pushing to `main` from your laptop puts the change on the
@@ -129,25 +129,25 @@ previous revision and that revision is recorded as failed, so a bad push
 restarts the service once rather than every five minutes forever — push a fix
 and the next run picks it up and clears the mark.
 
-If you have edited files directly in `/opt/sund`, the update refuses to
+If you have edited files directly in `/opt/subban`, the update refuses to
 fast-forward and leaves both your changes and the running service alone. Commit
 or discard them and it resumes.
 
 Check on it:
 
 ```
-systemctl list-timers sund-update.timer
+systemctl list-timers subban-update.timer
 ```
 
 ```
-journalctl -u sund-update -n 50 --no-pager
+journalctl -u subban-update -n 50 --no-pager
 ```
 
-To pause automatic deploys: `systemctl disable --now sund-update.timer`.
+To pause automatic deploys: `systemctl disable --now subban-update.timer`.
 
 ## Backups
 
-The count lives in `/var/lib/sund/state.json`, **not** in `/opt/sund`. That one
+The count lives in `/var/lib/subban/state.json`, **not** in `/opt/subban`. That one
 file is the only thing not reproducible from git. Everything else can be thrown
 away and re-cloned.
 
@@ -158,7 +158,7 @@ service is running:
 
 ```
 curl -s http://<old-host>:8080/api/state | ssh root@<container-ip> \
-  'systemctl stop sund && cat > /var/lib/sund/state.json && systemctl start sund'
+  'systemctl stop subban && cat > /var/lib/subban/state.json && systemctl start subban'
 ```
 
 Or use **Export data** in the app's settings on the old machine and write that
@@ -169,18 +169,18 @@ file to the same path.
 **Service won't start, `DynamicUser` or `ProtectSystem` errors.** Older systemd
 in an unprivileged container may not support the hardening options. Comment out
 `DynamicUser=true`, `ProtectSystem=strict` and `ProtectHome=true`, add
-`User=root`, then `systemctl daemon-reload && systemctl restart sund`. You lose
+`User=root`, then `systemctl daemon-reload && systemctl restart subban`. You lose
 some isolation but it will run.
 
 **`SyntaxError: Unexpected token` or `Cannot use import statement`.** Node is
 too old — check `node --version` is 18 or newer.
 
 **Count resets to zero after a restart.** The state file isn't writable. Check
-`journalctl -u sund` for `write failed:` and confirm `/var/lib/sund` exists and
+`journalctl -u subban` for `write failed:` and confirm `/var/lib/subban` exists and
 is owned by the service user.
 
 **Logs:**
 
 ```
-journalctl -u sund -f
+journalctl -u subban -f
 ```

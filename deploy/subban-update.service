@@ -1,0 +1,14 @@
+# Pulls and restarts Subban if the repo has moved. Triggered by subban-update.timer.
+[Unit]
+Description=Update Subban from git
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/subban/deploy/subban-update.sh
+Environment=SUBBAN_REPO=/opt/subban
+Environment=SUBBAN_URL=http://127.0.0.1:8080
+# Needs to write to /opt/subban and call systemctl, so it runs as root — unlike
+# subban.service itself, which is a locked-down DynamicUser.
+User=root

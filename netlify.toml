@@ -1,4 +1,4 @@
-# Sund is a static site plus one function; no build step for the front end.
+# Subban is a static site plus one function; no build step for the front end.
 [build]
   publish = "."
   command = ""

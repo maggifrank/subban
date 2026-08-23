@@ -1,4 +1,4 @@
-/* Sund front end. The count lives on the server so every device sees the same
+/* Subban front end. The count lives on the server so every device sees the same
    number; taps apply optimistically and sync in the background, so the app
    still works with a phone in a pool changing room on one bar of signal. */
 
@@ -11,12 +11,25 @@ import {
 } from './lib/i18n.js';
 import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 
-const CACHE_KEY = 'sund.cache.v2';
-const TOKEN_KEY = 'sund.token';
-const LANG_KEY = 'sund.lang';
+const CACHE_KEY = 'subban.cache.v2';
+const TOKEN_KEY = 'subban.token';
+const LANG_KEY = 'subban.lang';
 const POLL_MS = 15000;
 const RATES_MS = 30 * 60 * 1000;   // the server caches for 12h; this is just a nudge
 const CHART_MONTHS = 12;
+
+/* The app was called "sund" before; carry a device's existing preferences and
+   any queued offline taps over to the new key names once, so the rename doesn't
+   quietly drop swims that hadn't synced yet. */
+function migrateStorageKeys() {
+  const moves = [['sund.cache.v2', CACHE_KEY], ['sund.token', TOKEN_KEY], ['sund.lang', LANG_KEY]];
+  for (const [from, to] of moves) {
+    const old = localStorage.getItem(from);
+    if (old !== null && localStorage.getItem(to) === null) localStorage.setItem(to, old);
+    localStorage.removeItem(from);
+  }
+}
+migrateStorageKeys();
 
 let confirmed = emptyState();
 let queue = [];
@@ -596,7 +609,7 @@ ui.exportBtn.addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(view(), null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `sund-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `subban-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
 });

@@ -1,4 +1,4 @@
-# Sund
+# Subban
 
 A swim-trip tracker. Tap **+** after each visit and watch the yearly membership
 turn from an expensive mistake into a bargain.
@@ -154,7 +154,7 @@ Then open <http://localhost:8080>. Still no `npm install` needed — `serve.js`
 uses only the Node standard library. The `@netlify/blobs` dependency in
 `package.json` is imported solely by the Netlify function.
 
-State is written to `data/state.json`, or wherever `SUND_DATA` points.
+State is written to `data/state.json`, or wherever `SUBBAN_DATA` points.
 
 ### In an LXC container
 
@@ -163,17 +163,17 @@ codes, backups and troubleshooting. The short version:
 
 ```bash
 apt-get install -y nodejs git
-git clone https://github.com/maggifrank/sund.git /opt/sund
-cp /opt/sund/deploy/sund.service /etc/systemd/system/
-systemctl enable --now sund
+git clone https://github.com/maggifrank/subban.git /opt/subban
+cp /opt/subban/deploy/subban.service /etc/systemd/system/
+systemctl enable --now subban
 ```
 
 It listens on `0.0.0.0:8080`, so every device on the LAN — including the phone in
 your swim bag — points at the container's IP and shares one count.
 
-The count lives in `/var/lib/sund/state.json`, not in the repo. Back up that file.
+The count lives in `/var/lib/subban/state.json`, not in the repo. Back up that file.
 
-Install `deploy/sund-update.timer` as well and the container polls GitHub every
+Install `deploy/subban-update.timer` as well and the container polls GitHub every
 five minutes, deploying anything you push — with a health check and automatic
 rollback if the new revision won't start. See [DEPLOY.md](DEPLOY.md).
 
@@ -190,12 +190,12 @@ netlify deploy --prod
 Or connect the GitHub repo in the Netlify UI and take the defaults — Netlify
 installs `@netlify/blobs` and bundles the function itself.
 
-**Set `SUND_TOKEN` before you do this.** On the LAN an open endpoint is fine; on
+**Set `SUBBAN_TOKEN` before you do this.** On the LAN an open endpoint is fine; on
 a public URL it means anyone who finds it can edit your swim count.
 
 ## The access code
 
-Optional, off by default. Set `SUND_TOKEN` on the server (systemd `Environment=`,
+Optional, off by default. Set `SUBBAN_TOKEN` on the server (systemd `Environment=`,
 or Netlify environment variables) and every device will prompt for it once and
 remember it. Without it the API is open to anyone who can reach the port.
 
@@ -232,6 +232,6 @@ your count, and is a shared code rather than real per-user accounts.
 | `lib/rates.js` | ECB rate fetching and cache freshness, shared by both backends |
 | `serve.js` | LXC backend — static files + API, file-backed, no dependencies |
 | `netlify/functions/trips.js` | Netlify backend — same API, Blobs-backed |
-| `deploy/sund.service` | systemd unit |
-| `deploy/sund-update.*` | poll GitHub every 5 min, deploy with rollback |
+| `deploy/subban.service` | systemd unit |
+| `deploy/subban-update.*` | poll GitHub every 5 min, deploy with rollback |
 | `DEPLOY.md` | LXC deployment runbook |
