@@ -7,7 +7,7 @@ import {
   costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips
 } from './lib/state.js';
 import {
-  LANGS, DEFAULT_LANG, detectLang, t, plural, kr, ordinal, formatDate, formatTime
+  LANGS, LANG_NAMES, DEFAULT_LANG, detectLang, t, plural, kr, ordinal, formatDate, formatTime
 } from './lib/i18n.js';
 
 const CACHE_KEY = 'sund.cache.v2';
@@ -147,7 +147,7 @@ const ui = {
   progressFill: el('progress-fill'), breakevenLine: el('breakeven-line'), breakevenNote: el('breakeven-note'),
   cardPerTrip: el('card-per-trip'), cardPerTripSub: el('card-per-trip-sub'),
   delta: el('delta'), deltaSub: el('delta-sub'),
-  sync: el('sync'), syncText: el('sync-text'), langToggle: el('lang-toggle'),
+  sync: el('sync'), syncText: el('sync-text'), langSelect: el('lang-select'),
   chart: el('chart'),
   historyToggle: el('history-toggle'), historyPanel: el('history-panel'), historyBody: el('history-body'),
   historySummary: el('history-summary'),
@@ -178,6 +178,7 @@ function setLang(next) {
   if (!LANGS.includes(next)) return;
   lang = next;
   localStorage.setItem(LANG_KEY, lang);
+  ui.langSelect.value = lang;
   applyStaticStrings();
   historySig = null;        // month names and plurals changed; force a rebuild
   chartSig = null;
@@ -189,14 +190,16 @@ function setLang(next) {
 function setStatus(next) {
   status = next;
   ui.sync.dataset.status = next;
-  if (next === 'error') {
-    ui.syncText.textContent = lastError || t(lang, 'sync.error');
-    return;
-  }
-  const base = t(lang, `sync.${next}`);
-  ui.syncText.textContent = queue.length && next !== 'synced'
-    ? t(lang, 'sync.pending', { status: base, changes: plural(lang, queue.length, 'change') })
-    : base;
+  const text = next === 'error'
+    ? (lastError || t(lang, 'sync.error'))
+    : (() => {
+        const base = t(lang, `sync.${next}`);
+        return queue.length && next !== 'synced'
+          ? t(lang, 'sync.pending', { status: base, changes: plural(lang, queue.length, 'change') })
+          : base;
+      })();
+  ui.syncText.textContent = text;
+  ui.sync.title = text;
 }
 
 /* ---------- chart: trips per month ---------- */
@@ -440,7 +443,7 @@ function render() {
   }
   ui.breakevenNote.textContent = t(lang, 'be.note', {
     cardTrips: s.cardTrips, perTrip: kr(lang, perCardTrip), be, cashBe,
-    cards: lang === 'is' ? cards : ordinal(lang, cards)
+    cards: ordinal(lang, cards)      // "3." in is/pl, "3rd" in en
   });
 
   ui.cardPerTrip.textContent = kr(lang, perCardTrip);
@@ -477,7 +480,15 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '-' || e.key === 'ArrowDown') { ui.minus.click(); e.preventDefault(); }
 });
 
-ui.langToggle.addEventListener('click', () => setLang(lang === 'is' ? 'en' : 'is'));
+/* Each option is written in its own language, so it is readable to the person
+   looking for it regardless of which one is currently active. */
+for (const code of LANGS) {
+  const opt = document.createElement('option');
+  opt.value = code;
+  opt.textContent = LANG_NAMES[code];
+  ui.langSelect.append(opt);
+}
+ui.langSelect.addEventListener('change', () => setLang(ui.langSelect.value));
 
 ui.historyToggle.addEventListener('click', () => {
   const open = ui.historyPanel.hidden;
@@ -570,6 +581,7 @@ function askForToken() {
 
 /* ---------- start ---------- */
 
+ui.langSelect.value = lang;
 applyStaticStrings();
 bindChartTooltip();
 loadCache();

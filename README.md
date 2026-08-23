@@ -32,17 +32,22 @@ All three numbers are editable under ⚙, and the change syncs like everything e
 
 ## Languages
 
-Icelandic and English, toggled from the header and remembered per device. On a
-first visit the browser's own preference decides, defaulting to Icelandic.
+Icelandic, English and Polish, picked from the header and remembered per device.
+On a first visit the browser's own preference decides, defaulting to Icelandic.
 
-Both languages are complete — labels, the break-even sentence, sync statuses,
-confirm dialogs, month and weekday names, and the chart. Two things that a
-string table alone would get wrong are handled properly:
+All three are complete — labels, the break-even sentence, sync statuses, confirm
+dialogs, month and weekday names, and the chart. Three things a plain string
+table would get wrong are handled properly:
 
 - **Plurals.** Icelandic takes the singular for any number ending in 1 except 11
-  — *21 ferð* but *11 ferðir*. English is the plain `n === 1`.
-- **Number grouping.** Icelandic groups with dots (36.400), English with commas
-  (36,400).
+  — *21 ferð* but *11 ferðir*. Polish has three forms — *1 wejście*, *2–4
+  wejścia*, *5+ wejść* — with 12–14 falling back to the third (*12 wejść*, but
+  *22 wejścia*). English is the plain `n === 1`.
+- **Number grouping.** Icelandic groups with dots (36.400), Polish with
+  non-breaking spaces (36 400), English with commas (36,400).
+- **Case.** Polish inflects the month inside a date: the history heading reads
+  *sierpień 2026* but a trip is dated *23 sierpnia 2026*. Languages without a
+  separate in-date form fall back to the one list.
 
 Dates and numbers are formatted by hand rather than through `Intl`, because the
 browsers this runs in may not ship `is-IS` locale data and `Intl` fails soft — it
@@ -182,9 +187,10 @@ your count, and is a shared code rather than real per-user accounts.
   into one. The LXC backend serializes writes and doesn't have this problem.
 - **Backdating is date-only.** You can log that you swam last Tuesday, but not
   that it was at 7am. The entry is stored at midday and displayed without a time.
-- **The Icelandic is mine, not a native speaker's.** It is grammatical and the
-  plural rules are right, but a few term choices (*núllpunktur*, *fjölnotakort*)
-  are worth a second opinion.
+- **The Icelandic and Polish are mine, not a native speaker's.** The grammar and
+  plural rules are right, but term choices are worth a second opinion —
+  *núllpunktur* / *fjölnotakort* in Icelandic, and *wejście* (pool admission)
+  and *próg opłacalności* in Polish.
 - **No membership start date.** The app counts trips, not the year they belong
   to. When the membership renews, use **Reset trips** to start the new season.
 

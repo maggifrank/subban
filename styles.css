@@ -409,4 +409,30 @@ h1 {
 }
 .chart-tip[data-show="1"] { opacity: 1; }
 
-.lang-btn { width: auto; padding: 0 12px; font-size: 13px; }
+.lang-select {
+  font: inherit;
+  font-size: 13px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+  max-width: 30vw;
+}
+.lang-select:hover { color: var(--ink); }
+
+/* The status line can run long — "Offline — will sync later (3 changes
+   pending)". Clip it rather than let it push the header controls around; the
+   full text stays in the pill's title, and the dot carries the state anyway. */
+.sync {
+  min-width: 0;
+  max-width: 42vw;
+}
+.sync #sync-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.head-right { min-width: 0; }
