@@ -3,10 +3,7 @@
    JSON file. Still zero npm dependencies — nothing here needs `npm install`.
 
    Usage: node serve.js [port]
-   Env:   PORT, HOST, SUBBAN_DATA (state file), SUBBAN_TOKEN (optional access code)
-          The SUND_* names are still honoured, so a container still running the
-          pre-rename systemd unit keeps finding its state file instead of
-          silently starting empty. Remove once the unit has been migrated. */
+   Env:   PORT, HOST, SUBBAN_DATA (state file), SUBBAN_TOKEN (optional access code) */
 
 import http from 'node:http';
 import fs from 'node:fs/promises';
@@ -20,8 +17,8 @@ import { emptyRates, refreshThrough } from './lib/rates.js';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.argv[2] || process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
-const DATA = process.env.SUBBAN_DATA || process.env.SUND_DATA || path.join(ROOT, 'data', 'state.json');
-const TOKEN = process.env.SUBBAN_TOKEN || process.env.SUND_TOKEN || '';
+const DATA = process.env.SUBBAN_DATA || path.join(ROOT, 'data', 'state.json');
+const TOKEN = process.env.SUBBAN_TOKEN || '';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',

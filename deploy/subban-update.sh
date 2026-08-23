@@ -5,8 +5,8 @@
 # Env: SUBBAN_REPO (default /opt/subban), SUBBAN_URL (default http://127.0.0.1:8080)
 set -euo pipefail
 
-REPO="${SUBBAN_REPO:-${SUND_REPO:-/opt/subban}}"
-URL="${SUBBAN_URL:-${SUND_URL:-http://127.0.0.1:8080}}"
+REPO="${SUBBAN_REPO:-/opt/subban}"
+URL="${SUBBAN_URL:-http://127.0.0.1:8080}"
 # Remembers a revision that already failed here, so a bad push doesn't get
 # retried — and the service restarted — every time the timer fires. Lives in
 # .git/ because that is untracked, persistent and root-writable.

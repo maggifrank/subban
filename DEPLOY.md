@@ -179,6 +179,30 @@ too old — check `node --version` is 18 or newer.
 `journalctl -u subban` for `write failed:` and confirm `/var/lib/subban` exists and
 is owned by the service user.
 
+**`status=238/STATE_DIRECTORY`, journal says `Failed to set up special
+execution directory in /var/lib: File exists`.** Something is sitting where
+systemd wants to manage its own state directory. Because the unit uses
+`DynamicUser=true`, the real directory is `/var/lib/private/subban` and
+`/var/lib/subban` is only a **symlink** to it — so moving or restoring
+`/var/lib/subban` by hand leaves a stale entry systemd refuses to touch.
+
+Fix it in `/var/lib/private`, not `/var/lib`:
+
+```
+systemctl stop subban
+rm -f /var/lib/subban                 # a symlink, not your data
+mv /var/lib/private/<old> /var/lib/private/subban
+chown --reference=/var/lib/private/subban /var/lib/private/subban/state.json
+systemctl start subban
+```
+
+Check the destination does not already exist before that `mv` — if it does, `mv`
+puts the source *inside* it and the app starts on an empty state. The startup
+log tells you which happened: `State file: ... (will be created)` means it is
+not finding the file. The dynamic user's UID changes with the service name, so
+the `chown` matters — without it the count reads correctly but new trips fail
+to save.
+
 **Logs:**
 
 ```
