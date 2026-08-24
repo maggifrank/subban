@@ -33,6 +33,18 @@ async function get(pathname) {
   return res.json();
 }
 
+/* Publish the date a swim happened, not the hour. The exact times are a fairly
+   detailed picture of someone's week, and nothing on the public page needs
+   them: the count, cost per trip, break-even and the monthly chart all work off
+   dates alone. Anchoring at local midday matches the convention backdated trips
+   already use, so the page renders these as date-only entries. */
+function stripTimes(trips) {
+  return trips.map((iso) => {
+    const d = new Date(iso);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0).toISOString();
+  }).sort();
+}
+
 /* Only the files the read-only page actually needs. lib/api.js and lib/rates.js
    are server-side and are left out on purpose. */
 const COPY = [
@@ -86,7 +98,11 @@ for (const [from, to] of COPY) {
 
 await fs.writeFile(
   path.join(DIST, 'state.json'),
-  JSON.stringify({ ...state, generatedAt: new Date().toISOString() }, null, 2)
+  JSON.stringify({
+    ...state,
+    trips: stripTimes(state.trips),
+    generatedAt: new Date().toISOString()
+  }, null, 2)
 );
 await fs.writeFile(path.join(DIST, 'rates.json'), JSON.stringify(rates, null, 2));
 await fs.writeFile(path.join(DIST, 'netlify.toml'), NETLIFY_TOML);

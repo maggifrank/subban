@@ -4,7 +4,7 @@
    lib/ modules the private app uses, so the two cannot disagree. */
 
 import { normalize, costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips } from './lib/state.js';
-import { LANGS, LANG_NAMES, detectLang, t, plural, ordinal, formatDate, formatTime } from './lib/i18n.js';
+import { LANGS, LANG_NAMES, detectLang, t, plural, ordinal, formatDate } from './lib/i18n.js';
 import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/chart.js';
 
@@ -59,9 +59,6 @@ function renderChart(trips) {
   ui.chart.innerHTML = chartHTML(lang, trips);
 }
 
-const isBackdated = (d) =>
-  d.getHours() === 12 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0;
-
 let historySig = null;
 
 function renderHistory(trips) {
@@ -92,11 +89,9 @@ function renderHistory(trips) {
       const n = trips.filter((x) => monthKey(new Date(x)) === key).length;
       rows.push({ month: formatDate(lang, d, 'month'), count: plural(lang, n, 'trip'), items: [] });
     }
-    rows[rows.length - 1].items.push({
-      n: i + 1,
-      date: formatDate(lang, d, 'day'),
-      time: isBackdated(d) ? '' : formatTime(d)
-    });
+    /* Dates only. The snapshot has no real times in it either — see
+       stripTimes() in bin/publish.mjs — but never render one regardless. */
+    rows[rows.length - 1].items.push({ n: i + 1, date: formatDate(lang, d, 'day') });
   });
 
   const frag = document.createDocumentFragment();
@@ -110,10 +105,9 @@ function renderHistory(trips) {
     for (const item of group.items.reverse()) {
       const row = document.createElement('div');
       row.className = 'trip-row trip-row--readonly';
-      row.innerHTML = '<span class="n"></span><span class="when"><span class="date"></span><span class="time"></span></span>';
+      row.innerHTML = '<span class="n"></span><span class="when"><span class="date"></span></span>';
       row.querySelector('.n').textContent = `#${item.n}`;
       row.querySelector('.date').textContent = item.date;
-      row.querySelector('.time').textContent = item.time;
       frag.append(row);
     }
   }

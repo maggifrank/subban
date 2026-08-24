@@ -186,6 +186,15 @@ It is read-only **by construction, not by hiding buttons**: the deploy is static
 files plus a `state.json` snapshot, with no API and no function behind it. There
 is nothing to authenticate because there is nothing to write to.
 
+The history shows **dates without times**. The times are stripped from the
+snapshot itself, not merely hidden in the page — otherwise they would still sit
+in `state.json` for anyone who opened it directly. Every published trip is
+anchored at local midday, which preserves the date and the count (two swims on
+one day stay two rows) while dropping the hour. Nothing on the public page needs
+the time: the count, cost per trip, break-even and the monthly chart all work
+off dates alone. The private app is unaffected and still records and shows exact
+times.
+
 Publish a fresh snapshot with:
 
 ```bash
