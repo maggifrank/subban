@@ -187,7 +187,7 @@ systemctl start subban-publish.service && journalctl -u subban-publish -n 5 --no
 
 A successful run logs `deployed <id> to https://... — no functions, verified`.
 A run with no new trips logs `no change since rev N — nothing to publish` and
-does not deploy at all, so the hourly schedule costs one local HTTP request
+does not deploy at all, so the 15-minute schedule costs one local HTTP request
 almost every time.
 
 The site id is set in the unit; only the token lives in the environment file.

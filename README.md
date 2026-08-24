@@ -195,7 +195,7 @@ the time: the count, cost per trip, break-even and the monthly chart all work
 off dates alone. The private app is unaffected and still records and shows exact
 times.
 
-The container publishes its own snapshot hourly — see
+The container publishes its own snapshot every 15 minutes — see
 [DEPLOY.md](DEPLOY.md#publishing-the-public-read-only-site). To publish by hand
 from anywhere that can reach a running instance:
 
@@ -212,7 +212,7 @@ site even though `--dir dist` was passed. Enumerating the files makes that
 impossible rather than merely guarded against.
 
 `--if-changed FILE` skips the deploy when the count has not moved, which is what
-makes an hourly timer cheap. Set `SUBBAN_TOKEN` if the source instance requires
+makes a frequent timer cheap. Set `SUBBAN_TOKEN` if the source instance requires
 an access code, and `NETLIFY_AUTH_TOKEN` to deploy from a machine without the
 Netlify CLI signed in.
 

@@ -1,12 +1,13 @@
-# Hourly is plenty: the snapshot only changes when you swim, and a run with no
-# new trips costs one local HTTP request and no deploy.
+# Every 15 minutes. A run with no new trips costs one local HTTP request and no
+# deploy at all, so the frequency is nearly free — only an actual swim causes a
+# deploy. Jitter is kept small relative to the interval.
 [Unit]
-Description=Publish Subban's public snapshot hourly
+Description=Publish Subban's public snapshot
 
 [Timer]
 OnBootSec=5min
-OnUnitActiveSec=1h
-RandomizedDelaySec=5min
+OnUnitActiveSec=15min
+RandomizedDelaySec=2min
 Unit=subban-publish.service
 
 [Install]
