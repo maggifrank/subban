@@ -1,0 +1,29 @@
+# Publishes the public read-only snapshot to Netlify. Triggered by
+# subban-publish.timer. Needs a Netlify token — see DEPLOY.md.
+[Unit]
+Description=Publish Subban's public snapshot
+After=network-online.target subban.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/subban
+# --if-changed makes most runs a single local request and no deploy at all.
+ExecStart=/usr/bin/node /opt/subban/bin/publish.mjs \
+  --source http://127.0.0.1:8080 \
+  --if-changed /var/lib/subban-publish/last.json \
+  --deploy
+Environment=SUBBAN_NETLIFY_SITE=29f4871b-14ac-4877-a888-6cb601d8974e
+Environment=SUBBAN_DIST=/var/lib/subban-publish/dist
+# Holds NETLIFY_AUTH_TOKEN. Root-owned, chmod 600 — systemd reads it before
+# dropping privileges, so the service itself never needs access to the file.
+EnvironmentFile=/etc/subban-publish.env
+StateDirectory=subban-publish
+DynamicUser=true
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

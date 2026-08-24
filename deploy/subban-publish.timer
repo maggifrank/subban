@@ -1,0 +1,13 @@
+# Hourly is plenty: the snapshot only changes when you swim, and a run with no
+# new trips costs one local HTTP request and no deploy.
+[Unit]
+Description=Publish Subban's public snapshot hourly
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+Unit=subban-publish.service
+
+[Install]
+WantedBy=timers.target

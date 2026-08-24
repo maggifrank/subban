@@ -145,6 +145,55 @@ journalctl -u subban-update -n 50 --no-pager
 
 To pause automatic deploys: `systemctl disable --now subban-update.timer`.
 
+## Publishing the public read-only site
+
+The container can publish its own snapshot to Netlify on a timer. It reaches
+*out* to Netlify, exactly like the GitHub poller — nothing new is exposed
+inbound, and the LAN-only rule is unchanged.
+
+First create a Netlify **personal access token** at
+<https://app.netlify.com/user/applications#personal-access-tokens>. Then, on the
+container, create the environment file with restrictive permissions *before*
+putting the token in it, so it is never briefly world-readable and never lands
+in your shell history:
+
+```
+install -m 600 /dev/null /etc/subban-publish.env
+```
+
+```
+nano /etc/subban-publish.env
+```
+
+with a single line:
+
+```
+NETLIFY_AUTH_TOKEN=nfp_your_token_here
+```
+
+Then install the timer:
+
+```
+cp /opt/subban/deploy/subban-publish.service /opt/subban/deploy/subban-publish.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now subban-publish.timer
+```
+
+Publish immediately rather than waiting for the first tick:
+
+```
+systemctl start subban-publish.service && journalctl -u subban-publish -n 5 --no-pager
+```
+
+A successful run logs `deployed <id> to https://... — no functions, verified`.
+A run with no new trips logs `no change since rev N — nothing to publish` and
+does not deploy at all, so the hourly schedule costs one local HTTP request
+almost every time.
+
+The site id is set in the unit; only the token lives in the environment file.
+Revoke it from the same Netlify page if the container is ever compromised —
+it grants deploy access to your Netlify account, nothing on the container.
+
 ## Backups
 
 The count lives in `/var/lib/subban/state.json`, **not** in `/opt/subban`. That one

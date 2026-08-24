@@ -195,21 +195,26 @@ the time: the count, cost per trip, break-even and the monthly chart all work
 off dates alone. The private app is unaffected and still records and shows exact
 times.
 
-Publish a fresh snapshot with:
+The container publishes its own snapshot hourly — see
+[DEPLOY.md](DEPLOY.md#publishing-the-public-read-only-site). To publish by hand
+from anywhere that can reach a running instance:
 
 ```bash
 node bin/publish.mjs --source http://<container-ip>:8080 --deploy
 ```
 
-That reads the live count, writes `dist/`, deploys it, and then asks Netlify what
-it actually published — **failing loudly if any function made it into the
-deploy**. That check exists because it caught a real mistake: the Netlify CLI
-resolves its project base by walking up from the deploy directory, so running it
-inside this repo finds `netlify/functions` and bundles the read/write API into
-the public site even when `--dir dist` is passed. The script now deploys from a
-copy outside the repo, where there is no functions directory to find.
+It deploys through Netlify's file API rather than the CLI, uploading exactly the
+files it lists and nothing else, then asks Netlify what it actually published and
+**fails if any function is present**. Both of those exist because of a real
+mistake: the CLI resolves its project base by walking up from the deploy
+directory, found `netlify/functions`, and put the read/write API on the public
+site even though `--dir dist` was passed. Enumerating the files makes that
+impossible rather than merely guarded against.
 
-Set `SUBBAN_TOKEN` in the environment if the source instance requires one.
+`--if-changed FILE` skips the deploy when the count has not moved, which is what
+makes an hourly timer cheap. Set `SUBBAN_TOKEN` if the source instance requires
+an access code, and `NETLIFY_AUTH_TOKEN` to deploy from a machine without the
+Netlify CLI signed in.
 
 ## Moving to Netlify later
 
