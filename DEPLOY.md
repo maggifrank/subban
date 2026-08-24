@@ -203,8 +203,17 @@ systemctl start subban-publish.service && journalctl -u subban-publish -n 5 --no
 
 A successful run logs `deployed <id> to https://... — no functions, verified`.
 A run with no new trips logs `no change since rev N — nothing to publish` and
-does not deploy at all, so the 15-minute schedule costs one local HTTP request
-almost every time.
+does not deploy at all, so running once a minute costs one local request and
+about 60ms almost every time. Only a swim — or a fresh ECB rate, once a day —
+actually reaches Netlify.
+
+To force a republish when the data has not changed but the published snapshot is
+wrong, clear the marker first, or the run will correctly decide there is nothing
+to do:
+
+```
+rm -f /var/lib/subban-publish/last.json && systemctl start subban-publish.service
+```
 
 The site id is set in the unit; only the token lives in the environment file.
 Revoke it from the same Netlify page if the container is ever compromised —

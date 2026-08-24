@@ -207,7 +207,7 @@ the time: the count, cost per trip, break-even and the monthly chart all work
 off dates alone. The private app is unaffected and still records and shows exact
 times.
 
-The container publishes its own snapshot every 15 minutes — see
+The container publishes its own snapshot every minute — see
 [DEPLOY.md](DEPLOY.md#publishing-the-public-read-only-site). To publish by hand
 from anywhere that can reach a running instance:
 
@@ -223,8 +223,11 @@ directory, found `netlify/functions`, and put the read/write API on the public
 site even though `--dir dist` was passed. Enumerating the files makes that
 impossible rather than merely guarded against.
 
-`--if-changed FILE` skips the deploy when the count has not moved, which is what
-makes a frequent timer cheap. Set `SUBBAN_TOKEN` if the source instance requires
+`--if-changed FILE` skips the deploy unless the trip count or the ECB rate date
+has moved, which is what makes a once-a-minute timer cheap — a no-op run is one
+request to an in-memory cache and exits in about 60ms. Keying on the count alone
+would freeze the published exchange rate at whatever it was when the last swim
+was logged. Set `SUBBAN_TOKEN` if the source instance requires
 an access code, and `NETLIFY_AUTH_TOKEN` to deploy from a machine without the
 Netlify CLI signed in.
 
@@ -270,7 +273,7 @@ your count, and is a shared code rather than real per-user accounts.
 - **Conversion is display-only and follows the language.** Someone reading in
   Polish still pays ISK at the pool; the zloty figure is a convenience, not a
   price. There is no way to pick a currency independently of the language.
-- **The public page lags by up to ~17 minutes.** It is a snapshot on a timer,
+- **The public page lags by up to about a minute.** It is a snapshot on a timer,
   not a live view. `systemctl start subban-publish.service` pushes it out now.
 - **No membership start date.** The app counts trips, not the year they belong
   to. When the membership renews, use **Reset trips** to start the new season.

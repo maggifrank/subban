@@ -1,13 +1,13 @@
-# Every 15 minutes. A run with no new trips costs one local HTTP request and no
-# deploy at all, so the frequency is nearly free — only an actual swim causes a
-# deploy. Jitter is kept small relative to the interval.
+# Every minute. A run with nothing new costs one local request against an
+# in-memory cache and exits without deploying, so only an actual swim — or a
+# fresh ECB rate once a day — reaches Netlify. No jitter: at this interval it
+# would just blur the cadence it exists to smooth.
 [Unit]
 Description=Publish Subban's public snapshot
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=15min
-RandomizedDelaySec=2min
+OnBootSec=1min
+OnUnitActiveSec=1min
 Unit=subban-publish.service
 
 [Install]

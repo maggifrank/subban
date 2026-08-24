@@ -197,11 +197,16 @@ try {
   console.warn(`rates unavailable (${err.message}) — the page will show ISK`);
 }
 
+/* Republish on a new swim *or* a new ECB rate. Keying on the trip count alone
+   would freeze the published conversion at whatever it was when the last swim
+   was logged — a week of not swimming would leave a week-old rate on the page. */
+const marker = { rev: state.rev, rateDate: rates?.date ?? null };
+
 if (IF_CHANGED) {
   let last = null;
-  try { last = JSON.parse(await fs.readFile(IF_CHANGED, 'utf8')).rev; } catch { /* first run */ }
-  if (last === state.rev) {
-    console.log(`no change since rev ${state.rev} — nothing to publish`);
+  try { last = JSON.parse(await fs.readFile(IF_CHANGED, 'utf8')); } catch { /* first run */ }
+  if (last && last.rev === marker.rev && (last.rateDate ?? null) === marker.rateDate) {
+    console.log(`no change since rev ${marker.rev} (rate ${marker.rateDate ?? 'none'}) — nothing to publish`);
     process.exit(0);
   }
 }
@@ -221,5 +226,5 @@ console.log(`deployed ${result.id} to ${result.url} — no functions, verified`)
 
 if (IF_CHANGED) {
   await fs.mkdir(path.dirname(IF_CHANGED), { recursive: true });
-  await fs.writeFile(IF_CHANGED, JSON.stringify({ rev: state.rev, at: new Date().toISOString() }, null, 2));
+  await fs.writeFile(IF_CHANGED, JSON.stringify({ ...marker, at: new Date().toISOString() }, null, 2));
 }
