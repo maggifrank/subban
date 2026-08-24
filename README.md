@@ -4,8 +4,12 @@ A swim-trip tracker. Tap **+** after each visit and watch the yearly membership
 turn from an expensive mistake into a bargain.
 
 The count is **shared across devices** — log a swim on your phone at the pool,
-see it on your laptop at home. Same tree runs from an LXC container or from
-Netlify, with no code changes.
+see it on your laptop at home.
+
+It runs in two places behind **one address**, <https://subban.talva.is>. Inside
+the LAN that name resolves to the container and you get the full read/write app.
+From outside it resolves to Netlify and you get a read-only snapshot, with no
+API behind it to write to. Same URL, two faces, decided by DNS.
 
 ## What it works out
 
@@ -179,8 +183,16 @@ rollback if the new revision won't start. See [DEPLOY.md](DEPLOY.md).
 
 ## The public read-only site
 
-<https://subban-swim.netlify.app> — a snapshot of the count, the cost per trip,
-break-even and the chart, with no way to change anything.
+<https://subban.talva.is> from outside the LAN — a snapshot of the count, the
+cost per trip, break-even and the chart, with no way to change anything. Its
+direct Netlify address is <https://subban-swim.netlify.app>.
+
+The same hostname serves the private app inside the LAN, through split-horizon
+DNS: internally it resolves to Caddy and on to the container, externally to
+Cloudflare and on to Netlify. The container itself is on a private address and
+is not routable from the internet, so the writable app is only ever reachable
+from home. Nothing distinguishes the two by path or port — the split is entirely
+in what the name resolves to.
 
 It is read-only **by construction, not by hiding buttons**: the deploy is static
 files plus a `state.json` snapshot, with no API and no function behind it. There
@@ -216,21 +228,22 @@ makes a frequent timer cheap. Set `SUBBAN_TOKEN` if the source instance requires
 an access code, and `NETLIFY_AUTH_TOKEN` to deploy from a machine without the
 Netlify CLI signed in.
 
-## Moving to Netlify later
+## Running the whole app on Netlify
 
-`netlify.toml` and `netlify/functions/trips.js` are already here. The function
-serves the same API backed by [Netlify Blobs](https://docs.netlify.com/blobs/overview/)
-instead of a file, and claims `/api/*` through its own `config.path`.
+`netlify.toml` and `netlify/functions/trips.js` implement the full read/write API
+against [Netlify Blobs](https://docs.netlify.com/blobs/overview/) instead of a
+file, claiming `/api/*` through the function's own `config.path`. It is unused —
+the app runs on the LXC — but kept working as an escape hatch.
 
-```bash
-netlify deploy --prod
-```
+> **Do not run `netlify deploy` from this directory.** The repo's `.netlify`
+> link points at `subban-swim`, which is the *public read-only site*. A deploy
+> from here would replace that static snapshot with the read/write app and put
+> an API on a public URL. Publishing is done by `bin/publish.mjs`, which uploads
+> an explicit file list and refuses to finish if a function lands in the deploy.
 
-Or connect the GitHub repo in the Netlify UI and take the defaults — Netlify
-installs `@netlify/blobs` and bundles the function itself.
-
-**Set `SUBBAN_TOKEN` before you do this.** On the LAN an open endpoint is fine; on
-a public URL it means anyone who finds it can edit your swim count.
+If you ever do want the whole app on Netlify, create a **separate site** for it,
+and set `SUBBAN_TOKEN` in its environment first — otherwise anyone who finds the
+URL can edit the count.
 
 ## The access code
 
@@ -257,6 +270,8 @@ your count, and is a shared code rather than real per-user accounts.
 - **Conversion is display-only and follows the language.** Someone reading in
   Polish still pays ISK at the pool; the zloty figure is a convenience, not a
   price. There is no way to pick a currency independently of the language.
+- **The public page lags by up to ~17 minutes.** It is a snapshot on a timer,
+  not a live view. `systemctl start subban-publish.service` pushes it out now.
 - **No membership start date.** The app counts trips, not the year they belong
   to. When the membership renews, use **Reset trips** to start the new season.
 
@@ -264,15 +279,18 @@ your count, and is a shared code rather than real per-user accounts.
 
 | | |
 |---|---|
-| `index.html` `styles.css` `app.js` | the app |
-| `lib/state.js` `lib/api.js` | domain logic and routing, shared by everything |
-| `lib/i18n.js` | Icelandic, English and Polish strings, plurals, date and number formats |
+| `index.html` `styles.css` `app.js` | the private read/write app |
+| `public/` | the public read-only page |
+| `lib/state.js` | trips, settings and the break-even arithmetic |
+| `lib/api.js` | HTTP routing and validation, shared by both backends |
+| `lib/i18n.js` | Icelandic, English and Polish strings, plurals, dates, number formats |
 | `lib/money.js` | currency per language, conversion and formatting |
-| `lib/rates.js` | ECB rate fetching and cache freshness, shared by both backends |
+| `lib/chart.js` | the trips-per-month chart, shared by both pages |
+| `lib/rates.js` | ECB rate fetching and cache freshness |
 | `serve.js` | LXC backend — static files + API, file-backed, no dependencies |
-| `netlify/functions/trips.js` | Netlify backend — same API, Blobs-backed |
-| `deploy/subban.service` | systemd unit |
+| `netlify/functions/trips.js` | unused Netlify backend — same API, Blobs-backed |
+| `bin/publish.mjs` | snapshot, build and deploy the public site |
+| `deploy/subban.service` | the app |
 | `deploy/subban-update.*` | poll GitHub every 5 min, deploy with rollback |
-| `public/` `bin/publish.mjs` | the public read-only site and its build |
-| `lib/chart.js` | the chart, shared by the private app and the public page |
+| `deploy/subban-publish.*` | publish the public snapshot every 15 min |
 | `DEPLOY.md` | LXC deployment runbook |
