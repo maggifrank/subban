@@ -99,12 +99,28 @@ Each device prompts for the code once and remembers it. Without it, anyone who
 can reach the port can change the count — fine on a home LAN, not fine on a
 public address.
 
+**If the publish timer is installed, give it the code too**, or it will start
+getting 401s and the public site will quietly stop updating with no visible
+error on the page:
+
+```
+printf 'SUBBAN_TOKEN=the-same-code\n' >> /etc/subban-publish.env
+```
+
 ## Updating
 
 Manually:
 
 ```
 cd /opt/subban && git pull && systemctl restart subban
+```
+
+**Code changes deploy themselves; unit files do not.** The updater pulls the
+repo and restarts the service, but never touches `/etc/systemd/system`. After a
+commit that changes anything under `deploy/`, copy it across by hand:
+
+```
+cp /opt/subban/deploy/<changed-unit> /etc/systemd/system/ && systemctl daemon-reload
 ```
 
 ### Automatically
@@ -196,9 +212,19 @@ it grants deploy access to your Netlify account, nothing on the container.
 
 ## Backups
 
-The count lives in `/var/lib/subban/state.json`, **not** in `/opt/subban`. That one
-file is the only thing not reproducible from git. Everything else can be thrown
-away and re-cloned.
+The count lives in `/var/lib/subban/state.json`, **not** in `/opt/subban`. That
+one file is the only thing not reproducible from git — everything else can be
+thrown away and re-cloned.
+
+A PVE container backup covers it along with everything else, and needs no
+app-specific setup. `serve.js` writes the file via a temp file and `rename()`,
+which is atomic on Linux, so a snapshot taken mid-write gets either the complete
+old file or the complete new one — never a half-written one.
+
+For a file-level copy, note that `/var/lib/subban` is a **symlink** into
+`/var/lib/private/subban` because the unit uses `DynamicUser=true`. Reading
+through the symlink is fine; restoring by replacing the symlink is not — see the
+`STATE_DIRECTORY` entry under Troubleshooting.
 
 ## Bringing existing trips with you
 
@@ -207,11 +233,18 @@ service is running:
 
 ```
 curl -s http://<old-host>:8080/api/state | ssh root@<container-ip> \
-  'systemctl stop subban && cat > /var/lib/subban/state.json && systemctl start subban'
+  'systemctl stop subban && cat > /var/lib/subban/state.json &&
+   chown --reference=/var/lib/private/subban /var/lib/private/subban/state.json &&
+   systemctl start subban'
 ```
 
+The `chown` is not optional. Written as root, the file lands owned by root while
+the service runs as a dynamic user, so the count reads back correctly and then
+every new trip fails to save — a failure that looks like nothing is wrong until
+you tap **+**.
+
 Or use **Export data** in the app's settings on the old machine and write that
-file to the same path.
+file to the same path, with the same `chown` afterwards.
 
 ## Troubleshooting
 
