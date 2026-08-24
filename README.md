@@ -177,6 +177,31 @@ Install `deploy/subban-update.timer` as well and the container polls GitHub ever
 five minutes, deploying anything you push — with a health check and automatic
 rollback if the new revision won't start. See [DEPLOY.md](DEPLOY.md).
 
+## The public read-only site
+
+<https://subban-swim.netlify.app> — a snapshot of the count, the cost per trip,
+break-even and the chart, with no way to change anything.
+
+It is read-only **by construction, not by hiding buttons**: the deploy is static
+files plus a `state.json` snapshot, with no API and no function behind it. There
+is nothing to authenticate because there is nothing to write to.
+
+Publish a fresh snapshot with:
+
+```bash
+node bin/publish.mjs --source http://<container-ip>:8080 --deploy
+```
+
+That reads the live count, writes `dist/`, deploys it, and then asks Netlify what
+it actually published — **failing loudly if any function made it into the
+deploy**. That check exists because it caught a real mistake: the Netlify CLI
+resolves its project base by walking up from the deploy directory, so running it
+inside this repo finds `netlify/functions` and bundles the read/write API into
+the public site even when `--dir dist` is passed. The script now deploys from a
+copy outside the repo, where there is no functions directory to find.
+
+Set `SUBBAN_TOKEN` in the environment if the source instance requires one.
+
 ## Moving to Netlify later
 
 `netlify.toml` and `netlify/functions/trips.js` are already here. The function
@@ -234,4 +259,6 @@ your count, and is a shared code rather than real per-user accounts.
 | `netlify/functions/trips.js` | Netlify backend — same API, Blobs-backed |
 | `deploy/subban.service` | systemd unit |
 | `deploy/subban-update.*` | poll GitHub every 5 min, deploy with rollback |
+| `public/` `bin/publish.mjs` | the public read-only site and its build |
+| `lib/chart.js` | the chart, shared by the private app and the public page |
 | `DEPLOY.md` | LXC deployment runbook |

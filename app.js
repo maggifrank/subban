@@ -10,13 +10,13 @@ import {
   LANGS, LANG_NAMES, DEFAULT_LANG, detectLang, t, plural, ordinal, formatDate, formatTime
 } from './lib/i18n.js';
 import { money, isConverted, rateString, currencyFor } from './lib/money.js';
+import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/chart.js';
 
 const CACHE_KEY = 'subban.cache.v2';
 const TOKEN_KEY = 'subban.token';
 const LANG_KEY = 'subban.lang';
 const POLL_MS = 15000;
 const RATES_MS = 30 * 60 * 1000;   // the server caches for 12h; this is just a nudge
-const CHART_MONTHS = 12;
 
 /* The app was called "sund" before; carry a device's existing preferences and
    any queued offline taps over to the new key names once, so the rename doesn't
@@ -249,138 +249,13 @@ async function loadRates() {
 
 /* ---------- chart: trips per month ---------- */
 
-const monthKey = (d) => `${d.getFullYear()}-${d.getMonth()}`;
-
-/* Every month from the first trip to now, including the empty ones — a gap in
-   the swimming is part of the story, and dropping those months would space the
-   bars evenly and misstate the timeline. */
-function monthlySeries(trips, limit = CHART_MONTHS) {
-  if (!trips.length) return [];
-  const counts = new Map();
-  for (const iso of trips) {
-    const k = monthKey(new Date(iso));
-    counts.set(k, (counts.get(k) || 0) + 1);
-  }
-  const first = new Date(trips[0]);
-  const now = new Date();
-  const out = [];
-  const cursor = new Date(first.getFullYear(), first.getMonth(), 1);
-  const endY = now.getFullYear(), endM = now.getMonth();
-  while (cursor.getFullYear() < endY || (cursor.getFullYear() === endY && cursor.getMonth() <= endM)) {
-    out.push({ date: new Date(cursor), count: counts.get(monthKey(cursor)) || 0 });
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-  return out.slice(-limit);
-}
-
-/* Round the axis up to a clean number so the ticks read 0/2/4 rather than 0/3/7. */
-function axisTicks(max) {
-  const step = max <= 4 ? 1 : max <= 8 ? 2 : max <= 20 ? 5 : 10;
-  const top = Math.max(step, Math.ceil(max / step) * step);
-  const ticks = [];
-  for (let v = 0; v <= top; v += step) ticks.push(v);
-  return { top, ticks };
-}
-
-const svgEsc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-/* Column with a 4px rounded cap and a square foot on the baseline. */
-function barPath(x, y, w, h) {
-  const r = Math.min(4, h, w / 2);
-  if (h <= 0) return '';
-  return `M${x},${y + h}V${y + r}a${r},${r} 0 0 1 ${r},-${r}h${w - 2 * r}a${r},${r} 0 0 1 ${r},${r}V${y + h}Z`;
-}
-
 let chartSig = null;
 
 function renderChart(trips) {
-  const series = monthlySeries(trips);
-  const sig = lang + '|' + series.map((m) => monthKey(m.date) + ':' + m.count).join(',');
+  const sig = chartSignature(lang, trips);
   if (sig === chartSig) return;
   chartSig = sig;
-
-  if (!series.length) {
-    ui.chart.innerHTML = `<p class="chart-empty">${svgEsc(t(lang, 'chart.empty'))}</p>`;
-    return;
-  }
-
-  const W = 320, H = 168;
-  const PAD = { top: 14, right: 4, bottom: 22, left: 24 };
-  const plotW = W - PAD.left - PAD.right;
-  const plotH = H - PAD.top - PAD.bottom;
-
-  const { top, ticks } = axisTicks(Math.max(...series.map((m) => m.count), 1));
-  const band = plotW / series.length;
-  // 2px of surface between neighbours does the separating; never a stroke.
-  const barW = Math.min(24, Math.max(3, band - 2));
-  const yOf = (v) => PAD.top + plotH * (1 - v / top);
-
-  const peak = series.reduce((best, m, i) => (m.count > series[best].count ? i : best), 0);
-  /* Thin by measured band width, not by month count: 12 months still leaves
-     ~24 units per band, which fits a three-letter month at 9px. */
-  const labelEvery = band >= 20 ? 1 : band >= 13 ? 2 : 3;
-
-  const parts = [];
-
-  for (const v of ticks) {
-    const y = yOf(v);
-    parts.push(`<line class="gridline" x1="${PAD.left}" y1="${y}" x2="${W - PAD.right}" y2="${y}"/>`);
-    parts.push(`<text class="axis-text" x="${PAD.left - 5}" y="${y + 3}" text-anchor="end">${v}</text>`);
-  }
-
-  series.forEach((m, i) => {
-    const cx = PAD.left + band * i + band / 2;
-    const h = plotH * (m.count / top);
-    const y = yOf(m.count);
-    if (m.count > 0) {
-      parts.push(`<path class="bar" d="${barPath(cx - barW / 2, y, barW, h)}"/>`);
-    }
-    // Label the peak only — a number on every column is noise.
-    if (i === peak && m.count > 0) {
-      parts.push(`<text class="bar-label" x="${cx}" y="${y - 5}" text-anchor="middle">${m.count}</text>`);
-    }
-    if (i % labelEvery === 0 || i === series.length - 1) {
-      parts.push(`<text class="axis-text" x="${cx}" y="${H - 7}" text-anchor="middle">${svgEsc(formatDate(lang, m.date, 'short'))}</text>`);
-    }
-    const tip = t(lang, 'chart.tooltip', {
-      month: formatDate(lang, m.date, 'month'),
-      trips: plural(lang, m.count, 'trip')
-    });
-    parts.push(
-      /* No tabindex: focus events don't fire reliably on SVG shapes, so a tab
-         stop here would land with no tooltip. role + title still expose the
-         value to assistive tech, and the history panel is the table view. */
-      `<rect class="hit" x="${PAD.left + band * i}" y="${PAD.top}" width="${band}" height="${plotH}" ` +
-      `data-tip="${svgEsc(tip)}" data-cx="${cx}" data-cy="${y}" role="img" aria-label="${svgEsc(tip)}">` +
-      `<title>${svgEsc(tip)}</title></rect>`
-    );
-  });
-
-  ui.chart.innerHTML =
-    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${svgEsc(t(lang, 'chart.label'))}">${parts.join('')}</svg>` +
-    `<div class="chart-tip" id="chart-tip"></div>`;
-}
-
-/* Hover on a pointer, tap on a phone — the hit rects span the full plot height
-   so the target is never the width of a thin bar. */
-function bindChartTooltip() {
-  const show = (e) => {
-    const hit = e.target.closest('.hit');
-    const tip = el('chart-tip');
-    if (!hit || !tip) return;
-    const box = ui.chart.getBoundingClientRect();
-    const svg = ui.chart.querySelector('svg').getBoundingClientRect();
-    const scale = svg.width / 320;
-    tip.textContent = hit.dataset.tip;
-    tip.style.left = `${Number(hit.dataset.cx) * scale}px`;
-    tip.style.top = `${Number(hit.dataset.cy) * scale + (svg.top - box.top)}px`;
-    tip.dataset.show = '1';
-  };
-  const hide = () => { const tip = el('chart-tip'); if (tip) tip.dataset.show = '0'; };
-
-  ui.chart.addEventListener('pointerover', show);
-  ui.chart.addEventListener('pointermove', show);
-  ui.chart.addEventListener('pointerleave', hide);
+  ui.chart.innerHTML = chartHTML(lang, trips);
 }
 
 /* ---------- history ---------- */
@@ -632,7 +507,7 @@ function askForToken() {
 
 ui.langSelect.value = lang;
 applyStaticStrings();
-bindChartTooltip();
+bindChartTooltip(ui.chart);
 loadCache();
 render();
 /* flush() first: anything logged offline before the app was last closed is

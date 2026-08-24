@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="is">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b3d5c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e8f4fa" media="(prefers-color-scheme: light)">
+<title>Subban</title>
+<meta name="description" content="Swim trips against a yearly membership — cost per trip and break-even.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏊</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="app">
+
+  <header class="head">
+    <h1>Subban</h1>
+    <div class="head-right">
+      <span id="updated" class="updated"></span>
+      <select id="lang-select" class="lang-select" data-i18n-aria="a11y.langSwitch"></select>
+    </div>
+  </header>
+
+  <section class="counter" aria-labelledby="trips-label">
+    <div id="trips-label" class="label" data-i18n="counter.label"></div>
+    <div class="count-row count-row--readonly">
+      <output id="trips" class="count">0</output>
+    </div>
+    <div id="last-swim" class="sub"></div>
+  </section>
+
+  <section class="hero" aria-labelledby="cpt-label">
+    <div id="cpt-label" class="label" data-i18n="cost.label"></div>
+    <div id="cost-per-trip" class="hero-value">—</div>
+    <div id="cost-per-trip-sub" class="sub"></div>
+  </section>
+
+  <section class="card" aria-labelledby="be-label">
+    <div id="be-label" class="label"></div>
+    <div class="progress" role="img">
+      <div id="progress-fill" class="progress-fill" style="width:0%"></div>
+    </div>
+    <div id="breakeven-line" class="big-line">—</div>
+    <p id="breakeven-note" class="note"></p>
+  </section>
+
+  <section class="grid">
+    <div class="stat">
+      <div class="label" data-i18n="stat.cardPerTrip"></div>
+      <div id="card-per-trip" class="stat-value">—</div>
+      <div id="card-per-trip-sub" class="sub"></div>
+    </div>
+    <div class="stat">
+      <div class="label" data-i18n="stat.delta"></div>
+      <div id="delta" class="stat-value">—</div>
+      <div id="delta-sub" class="sub"></div>
+    </div>
+  </section>
+
+  <section class="card chart-card" aria-labelledby="chart-label">
+    <div id="chart-label" class="label" data-i18n="chart.label"></div>
+    <div id="chart" class="chart"></div>
+  </section>
+
+  <section class="card history">
+    <button id="history-toggle" class="disclosure" aria-expanded="false" aria-controls="history-body">
+      <span class="label" data-i18n="history.label"></span>
+      <span id="history-summary" class="sub"></span>
+      <span class="chev" aria-hidden="true">▾</span>
+    </button>
+    <div id="history-body" hidden></div>
+  </section>
+
+  <p id="rate-note" class="rate-note" hidden></p>
+  <p class="rate-note" data-i18n="public.readonly"></p>
+
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

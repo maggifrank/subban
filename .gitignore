@@ -3,3 +3,7 @@ node_modules/
 *.log
 subban-*.json
 data/
+
+# Local Netlify folder
+.netlify
+dist/

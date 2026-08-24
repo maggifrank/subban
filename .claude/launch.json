@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["serve.js"],
       "port": 8080
+    },
+    {
+      "name": "subban-public",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "dist", "-p", "8091", "-c-1", "--silent"],
+      "port": 8091
     }
   ]
 }
