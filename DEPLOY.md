@@ -187,13 +187,31 @@ with a single line:
 NETLIFY_AUTH_TOKEN=nfp_your_token_here
 ```
 
-Then install the timer:
+Then install the watcher and its safety-net timer:
 
 ```
-cp /opt/subban/deploy/subban-publish.service /opt/subban/deploy/subban-publish.timer /etc/systemd/system/
+cp /opt/subban/deploy/subban-publish.service /opt/subban/deploy/subban-publish.path /opt/subban/deploy/subban-publish.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now subban-publish.timer
+systemctl enable --now subban-publish.path subban-publish.timer
 ```
+
+`subban-publish.path` does the real work: `serve.js` touches
+`publish-trigger` in its state directory after every change, and the path unit
+republishes within seconds. The timer is only a backstop for a trigger missed
+while the publisher was down, and for the daily ECB rate when nobody has been
+swimming — four no-op runs a day.
+
+Check the watcher is armed:
+
+```
+systemctl status subban-publish.path --no-pager
+```
+
+`Active: active (waiting)` is what you want. Log a swim and
+`journalctl -u subban-publish -n 5 --no-pager` should show a deploy within
+seconds. If it never fires, the path unit is not seeing the file — the six-hour
+timer still keeps the page current meanwhile, so nothing is broken while you
+look into it.
 
 Publish immediately rather than waiting for the first tick:
 
@@ -203,9 +221,8 @@ systemctl start subban-publish.service && journalctl -u subban-publish -n 5 --no
 
 A successful run logs `deployed <id> to https://... — no functions, verified`.
 A run with no new trips logs `no change since rev N — nothing to publish` and
-does not deploy at all, so running once a minute costs one local request and
-about 60ms almost every time. Only a swim — or a fresh ECB rate, once a day —
-actually reaches Netlify.
+does not deploy at all. Publishing is event-driven, so this only happens on the
+six-hourly safety net or a duplicate trigger.
 
 To force a republish when the data has not changed but the published snapshot is
 wrong, clear the marker first, or the run will correctly decide there is nothing

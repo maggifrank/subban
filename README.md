@@ -207,7 +207,7 @@ the time: the count, cost per trip, break-even and the monthly chart all work
 off dates alone. The private app is unaffected and still records and shows exact
 times.
 
-The container publishes its own snapshot every minute — see
+The container republishes within seconds of a swim — see
 [DEPLOY.md](DEPLOY.md#publishing-the-public-read-only-site). To publish by hand
 from anywhere that can reach a running instance:
 
@@ -223,11 +223,11 @@ directory, found `netlify/functions`, and put the read/write API on the public
 site even though `--dir dist` was passed. Enumerating the files makes that
 impossible rather than merely guarded against.
 
-`--if-changed FILE` skips the deploy unless the trip count or the ECB rate date
-has moved, which is what makes a once-a-minute timer cheap — a no-op run is one
-request to an in-memory cache and exits in about 60ms. Keying on the count alone
-would freeze the published exchange rate at whatever it was when the last swim
-was logged. Set `SUBBAN_TOKEN` if the source instance requires
+Publishing is **event-driven**: `serve.js` touches a trigger file after every
+change and a systemd path unit republishes within seconds. A six-hourly timer
+remains as a safety net, so `--if-changed` still guards against redundant
+deploys — it compares the trip count *and* the ECB rate date, so the safety net
+also refreshes a stale rate when nobody has been swimming. Set `SUBBAN_TOKEN` if the source instance requires
 an access code, and `NETLIFY_AUTH_TOKEN` to deploy from a machine without the
 Netlify CLI signed in.
 
@@ -273,8 +273,9 @@ your count, and is a shared code rather than real per-user accounts.
 - **Conversion is display-only and follows the language.** Someone reading in
   Polish still pays ISK at the pool; the zloty figure is a convenience, not a
   price. There is no way to pick a currency independently of the language.
-- **The public page lags by up to about a minute.** It is a snapshot on a timer,
-  not a live view. `systemctl start subban-publish.service` pushes it out now.
+- **The public page can be up to six hours behind on exchange rates.** The count
+  itself republishes within seconds of a swim; only the ECB rate waits for the
+  safety-net timer, and the page always names the rate's date.
 - **No membership start date.** The app counts trips, not the year they belong
   to. When the membership renews, use **Reset trips** to start the new season.
 

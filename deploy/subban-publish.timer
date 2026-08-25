@@ -1,13 +1,14 @@
-# Every minute. A run with nothing new costs one local request against an
-# in-memory cache and exits without deploying, so only an actual swim — or a
-# fresh ECB rate once a day — reaches Netlify. No jitter: at this interval it
-# would just blur the cadence it exists to smooth.
+# A safety net, not the main mechanism — subban-publish.path republishes within
+# seconds of a swim. This catches a trigger missed while the publisher was down,
+# and picks up the daily ECB rate when nobody has been swimming. Four no-op runs
+# a day instead of 1440.
 [Unit]
-Description=Publish Subban's public snapshot
+Description=Publish Subban's public snapshot (periodic safety net)
 
 [Timer]
-OnBootSec=1min
-OnUnitActiveSec=1min
+OnBootSec=5min
+OnUnitActiveSec=6h
+RandomizedDelaySec=10min
 Unit=subban-publish.service
 
 [Install]

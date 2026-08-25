@@ -18,6 +18,12 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.argv[2] || process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA = process.env.SUBBAN_DATA || path.join(ROOT, 'data', 'state.json');
+/* Touched after every change so subban-publish.path can republish the public
+   snapshot immediately, instead of a timer polling for something that happens
+   a few times a week. It is a separate file because DATA is replaced by
+   rename(), which swaps the inode out from under an inotify watch; a plain
+   write gives systemd the close-write it actually watches for. */
+const TRIGGER = path.join(path.dirname(DATA), 'publish-trigger');
 const TOKEN = process.env.SUBBAN_TOKEN || '';
 
 const TYPES = {
@@ -52,6 +58,8 @@ const store = {
       const tmp = `${DATA}.${process.pid}.tmp`;
       await fs.writeFile(tmp, JSON.stringify(state, null, 2));
       await fs.rename(tmp, DATA);
+      // Best effort: a publish trigger must never be able to fail a swim.
+      await fs.writeFile(TRIGGER, `${state.rev}\n`).catch(() => {});
     }).catch((err) => console.error('write failed:', err.message));
     return writeChain;
   }
