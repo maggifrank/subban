@@ -508,3 +508,33 @@ h1 {
 }
 .pool-row.is-off-card .pool-bar > span { background: var(--ink-dim); opacity: .45; }
 .pool-row.is-off-card .pool-count { color: var(--ink-dim); font-weight: 500; }
+
+.trip-row .when { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.trip-row .when .line { display: flex; align-items: baseline; }
+
+.row-pool {
+  align-self: start;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-dim);
+  background: none;
+  border: none;
+  border-bottom: 1px dashed var(--line);
+  padding: 0 0 1px;
+  cursor: pointer;
+  text-align: left;
+}
+.row-pool.is-unset { font-style: italic; opacity: .75; }
+.row-pool.is-off-card::after { content: ' ·'; }
+.row-pool:hover { color: var(--ink); }
+
+.row-pool-select {
+  font: inherit;
+  font-size: 12px;
+  max-width: 100%;
+  padding: 2px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+}

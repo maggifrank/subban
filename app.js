@@ -4,14 +4,15 @@
 
 import {
   emptyState, normalize, addTrip, removeLastTrip, removeTripAt, clearTrips, updateSettings,
-  costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, poolCounts, tripAt, cardTrips
+  costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, poolCounts, tripAt, cardTrips,
+  setTripPool, poolIsOnCard
 } from './lib/state.js';
 import {
   LANGS, LANG_NAMES, DEFAULT_LANG, detectLang, t, plural, ordinal, formatDate, formatTime
 } from './lib/i18n.js';
 import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/chart.js';
-import { matchPool, idFor } from './lib/pools.js';
+import { matchPool, idFor, allPools } from './lib/pools.js';
 
 const CACHE_KEY = 'subban.cache.v2';
 const TOKEN_KEY = 'subban.token';
@@ -64,6 +65,7 @@ const OPS = {
   add: (s, op) => addTrip(s, op.at, op.pool),
   remove: (s) => removeLastTrip(s),
   removeAt: (s, op) => removeTripAt(s, op.at),
+  setPool: (s, op) => setTripPool(s, op.at, op.pool),
   clear: (s) => clearTrips(s),
   settings: (s, op) => updateSettings(s, op.patch)
 };
@@ -96,6 +98,7 @@ const REQUESTS = {
   add: (op) => api('POST', '/api/trips', op.pool ? { at: op.at, pool: op.pool } : { at: op.at }),
   remove: () => api('DELETE', '/api/trips/last'),
   removeAt: (op) => api('DELETE', '/api/trips/one', { at: op.at }),
+  setPool: (op) => api('PUT', '/api/trips/one/pool', { at: op.at, pool: op.pool ?? null }),
   clear: () => api('DELETE', '/api/trips'),
   settings: (op) => api('PUT', '/api/settings', op.patch)
 };
@@ -354,7 +357,7 @@ const isBackdated = (d) =>
 
 let historySig = null;
 
-function renderHistory(trips) {
+function renderHistory(trips, state) {
   ui.historySummary.textContent = trips.length
     ? t(lang, 'history.summary', {
         trips: plural(lang, trips.length, 'trip'),
@@ -391,11 +394,22 @@ function renderHistory(trips) {
 
     const row = document.createElement('div');
     row.className = 'trip-row';
-    row.innerHTML = `<span class="n"></span><span class="when"><span class="date"></span><span class="time"></span></span>` +
+    row.innerHTML = `<span class="n"></span>` +
+                    `<span class="when"><span class="line"><span class="date"></span><span class="time"></span></span>` +
+                    `<button class="row-pool" type="button"></button></span>` +
                     `<button class="row-del" type="button">×</button>`;
     row.querySelector('.n').textContent = `#${i + 1}`;
     row.querySelector('.date').textContent = formatDate(lang, d, 'day');
     row.querySelector('.time').textContent = isBackdated(d) ? '' : formatTime(d);
+
+    const poolBtn = row.querySelector('.row-pool');
+    const poolName = trip.pool
+      ? (state.pools.find((p) => p.id === trip.pool)?.name ?? trip.pool)
+      : null;
+    poolBtn.textContent = poolName ?? t(lang, 'pool.setOn');
+    poolBtn.classList.toggle('is-unset', !poolName);
+    poolBtn.classList.toggle('is-off-card', Boolean(trip.pool) && !poolIsOnCard(trip.pool, state.pools));
+    poolBtn.dataset.at = iso;
     const del = row.querySelector('.row-del');
     del.dataset.at = iso;
     del.setAttribute('aria-label', t(lang, 'history.removeAria', { date: formatDate(lang, d, 'day') }));
@@ -478,7 +492,7 @@ function render() {
   renderHere();
   renderPools(state);
   renderChart(state.trips);
-  renderHistory(state.trips);
+  renderHistory(state.trips, state);
 
   if (document.activeElement !== ui.inMembership) ui.inMembership.value = s.membership;
   if (document.activeElement !== ui.inCardPrice) ui.inCardPrice.value = s.cardPrice;
@@ -563,10 +577,48 @@ function showBackdateError(msg) {
 }
 
 ui.historyBody.addEventListener('click', (e) => {
-  const btn = e.target.closest('.row-del');
-  if (!btn) return;
-  enqueue({ kind: 'removeAt', at: btn.dataset.at });
+  const del = e.target.closest('.row-del');
+  if (del) { enqueue({ kind: 'removeAt', at: del.dataset.at }); return; }
+  const poolBtn = e.target.closest('.row-pool');
+  if (poolBtn) openPoolPicker(poolBtn);
 });
+
+/* One picker at a time, swapped in place of the tapped label. Every pool the
+   app knows about, plus an option to detach — which is how a mis-assigned trip
+   gets put back. */
+function openPoolPicker(button) {
+  const at = button.dataset.at;
+  const current = view().trips.find((x) => x.at === at)?.pool ?? '';
+  const select = document.createElement('select');
+  select.className = 'row-pool-select';
+
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = t(lang, 'pool.noneOption');
+  select.append(none);
+
+  for (const pool of allPools(view().pools).sort((a, b) => a.name.localeCompare(b.name))) {
+    const opt = document.createElement('option');
+    opt.value = pool.id;
+    opt.textContent = pool.card ? pool.name : `${pool.name} · ${t(lang, 'pool.forFun')}`;
+    select.append(opt);
+  }
+  select.value = current;
+
+  const commit = () => {
+    const chosen = select.value
+      ? allPools(view().pools).find((p) => p.id === select.value) ?? null
+      : null;
+    historySig = null;                       // the row must be rebuilt either way
+    enqueue({ kind: 'setPool', at, pool: chosen });
+  };
+  select.addEventListener('change', commit);
+  select.addEventListener('blur', () => { historySig = null; render(); });
+
+  button.replaceWith(select);
+  select.focus();
+  if (typeof select.showPicker === 'function') { try { select.showPicker(); } catch { /* not allowed here */ } }
+}
 
 ui.settingsToggle.addEventListener('click', () => {
   const open = ui.settings.hidden;

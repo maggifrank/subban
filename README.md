@@ -123,7 +123,14 @@ matched further than 250 m, which absorbs the fact that an OSM point sits
 somewhere inside a complex rather than at its door.
 
 A table at the bottom counts visits per pool, most-visited first, with anything
-logged without a pool last. Trips recorded before this existed, or with location
+logged without a pool last.
+
+Every row in History shows its pool and **can be tapped to change it** — pick
+another, or detach it entirely. That is how a backdated trip gets a pool at all
+(you are not standing at the pool when you log one), how anything recorded
+before pools existed gets attributed, and how a mis-matched check-in gets
+corrected. The money follows immediately: move a swim to a pool the card does
+not cover and the counter drops. Trips recorded before this existed, or with location
 switched off, simply have no pool — the count is unaffected.
 
 **Pools never reach the public site.** Which pool says which neighbourhood you
@@ -332,6 +339,8 @@ your count, and is a shared code rather than real per-user accounts.
 - **The public page can be up to six hours behind on exchange rates.** The count
   itself republishes within seconds of a swim; only the ECB rate waits for the
   safety-net timer, and the page always names the rate's date.
+- **A pool can only be set from the History list.** There is no bulk edit, so
+  attributing a long backlog is one tap per trip.
 - **Export has no matching import.** Settings offers *Export data*, which writes
   the current state as JSON, but there is no way to load one back through the
   app. Restoring means writing the file to `/var/lib/subban/state.json` and
