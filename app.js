@@ -4,13 +4,14 @@
 
 import {
   emptyState, normalize, addTrip, removeLastTrip, removeTripAt, clearTrips, updateSettings,
-  costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips
+  costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, poolCounts, tripAt
 } from './lib/state.js';
 import {
   LANGS, LANG_NAMES, DEFAULT_LANG, detectLang, t, plural, ordinal, formatDate, formatTime
 } from './lib/i18n.js';
 import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/chart.js';
+import { matchPool, idFor } from './lib/pools.js';
 
 const CACHE_KEY = 'subban.cache.v2';
 const TOKEN_KEY = 'subban.token';
@@ -36,6 +37,9 @@ let queue = [];
 let token = localStorage.getItem(TOKEN_KEY) || '';
 let lang = detectLang();
 let rates = null;         // whatever /api/rates last returned, or null
+let position = null;      // latest fix, or null if unavailable/denied
+let locating = false;
+let geoWatch = null;
 let status = 'syncing';   // syncing | synced | offline | locked | error
 let lastError = '';
 let flushing = false;
@@ -57,7 +61,7 @@ const saveCache = () =>
 /* ---------- optimistic view ---------- */
 
 const OPS = {
-  add: (s, op) => addTrip(s, op.at),
+  add: (s, op) => addTrip(s, op.at, op.pool),
   remove: (s) => removeLastTrip(s),
   removeAt: (s, op) => removeTripAt(s, op.at),
   clear: (s) => clearTrips(s),
@@ -89,7 +93,7 @@ async function api(method, path, body) {
 }
 
 const REQUESTS = {
-  add: (op) => api('POST', '/api/trips', { at: op.at }),
+  add: (op) => api('POST', '/api/trips', op.pool ? { at: op.at, pool: op.pool } : { at: op.at }),
   remove: () => api('DELETE', '/api/trips/last'),
   removeAt: (op) => api('DELETE', '/api/trips/one', { at: op.at }),
   clear: () => api('DELETE', '/api/trips'),
@@ -164,7 +168,7 @@ const ui = {
   cardPerTrip: el('card-per-trip'), cardPerTripSub: el('card-per-trip-sub'),
   delta: el('delta'), deltaSub: el('delta-sub'),
   sync: el('sync'), syncText: el('sync-text'), langSelect: el('lang-select'),
-  rateNote: el('rate-note'),
+  rateNote: el('rate-note'), here: el('here'), poolTable: el('pool-table'),
   chart: el('chart'),
   historyToggle: el('history-toggle'), historyPanel: el('history-panel'), historyBody: el('history-body'),
   historySummary: el('history-summary'),
@@ -247,6 +251,83 @@ async function loadRates() {
   render();
 }
 
+/* ---------- where am I ---------- */
+
+/* A position is kept warm while the app is on screen, so tapping + can resolve
+   the pool immediately instead of making the count wait on a GPS fix. The watch
+   stops when the page is hidden — this runs on a phone in a swim bag. */
+function startWatching() {
+  if (geoWatch !== null || !navigator.geolocation) return;
+  locating = true;
+  render();
+  geoWatch = navigator.geolocation.watchPosition(
+    (pos) => {
+      locating = false;
+      position = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      render();
+    },
+    () => {                       // denied, unavailable, or timed out
+      locating = false;
+      position = null;
+      render();
+    },
+    { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 }
+  );
+}
+
+function stopWatching() {
+  if (geoWatch === null) return;
+  navigator.geolocation.clearWatch(geoWatch);
+  geoWatch = null;
+}
+
+const poolHere = () => (position ? matchPool(position, view().pools)?.pool ?? null : null);
+
+function renderHere() {
+  const state = ui.here;
+  if (!navigator.geolocation) { state.hidden = true; return; }
+  state.hidden = false;
+  if (locating && !position) {
+    state.dataset.state = 'locating';
+    state.textContent = t(lang, 'pool.locating');
+    return;
+  }
+  if (!position) {
+    state.dataset.state = 'off';
+    state.textContent = t(lang, 'pool.off');
+    return;
+  }
+  const pool = poolHere();
+  state.dataset.state = pool ? 'here' : 'away';
+  state.textContent = pool ? t(lang, 'pool.here', { name: pool.name }) : t(lang, 'pool.away');
+}
+
+/* ---------- pool table ---------- */
+
+function renderPools(state) {
+  const rows = poolCounts(state);
+  if (!rows.length) {
+    ui.poolTable.innerHTML = `<p class="pool-empty">${t(lang, 'pool.empty')}</p>`;
+    return;
+  }
+  const most = Math.max(...rows.map((r) => r.count));
+  const frag = document.createDocumentFragment();
+  for (const row of rows) {
+    const el = document.createElement('div');
+    el.className = 'pool-row';
+    el.innerHTML = '<span class="pool-name"></span>' +
+                   '<span class="pool-bar"><span></span></span>' +
+                   '<span class="pool-count"></span>';
+    const name = el.querySelector('.pool-name');
+    name.textContent = row.name ?? t(lang, 'pool.unattributed');
+    name.classList.toggle('is-muted', row.name === null);
+    el.querySelector('.pool-bar > span').style.width = `${(row.count / most) * 100}%`;
+    el.querySelector('.pool-count').textContent = row.count;
+    frag.append(el);
+  }
+  ui.poolTable.replaceChildren(frag);
+}
+
 /* ---------- chart: trips per month ---------- */
 
 let chartSig = null;
@@ -269,11 +350,11 @@ function renderHistory(trips) {
   ui.historySummary.textContent = trips.length
     ? t(lang, 'history.summary', {
         trips: plural(lang, trips.length, 'trip'),
-        date: formatDate(lang, trips[trips.length - 1], 'full')
+        date: formatDate(lang, tripAt(trips[trips.length - 1]), 'full')
       })
     : t(lang, 'history.none');
 
-  const sig = lang + '|' + trips.join('|');
+  const sig = lang + '|' + trips.map((x) => `${tripAt(x)}~${x.pool ?? ''}`).join('|');
   if (ui.historyPanel.hidden || sig === historySig) return;
   historySig = sig;
 
@@ -285,14 +366,15 @@ function renderHistory(trips) {
   const frag = document.createDocumentFragment();
   let openMonth = null;
 
-  trips.forEach((iso, i) => {
+  trips.forEach((trip, i) => {
+    const iso = tripAt(trip);
     const d = new Date(iso);
     const key = monthKey(d);
     if (key !== openMonth) {
       openMonth = key;
       const head = document.createElement('div');
       head.className = 'month';
-      const n = trips.filter((x) => monthKey(new Date(x)) === key).length;
+      const n = trips.filter((x) => monthKey(new Date(tripAt(x))) === key).length;
       head.innerHTML = `<span></span><span class="month-count"></span>`;
       head.firstChild.textContent = formatDate(lang, d, 'month');
       head.lastChild.textContent = plural(lang, n, 'trip');
@@ -340,7 +422,7 @@ function render() {
   ui.trips.textContent = n;
   ui.minus.disabled = n === 0;
   ui.lastSwim.textContent = n
-    ? t(lang, 'counter.lastSwim', { date: formatDate(lang, state.trips[n - 1], 'full') })
+    ? t(lang, 'counter.lastSwim', { date: formatDate(lang, tripAt(state.trips[n - 1]), 'full') })
     : t(lang, 'counter.none');
 
   const cpt = costPerTrip(s, n);
@@ -378,6 +460,8 @@ function render() {
   ui.deltaSub.textContent = delta >= 0 ? t(lang, 'stat.saved') : t(lang, 'stat.owed');
 
   renderRateNote();
+  renderHere();
+  renderPools(state);
   renderChart(state.trips);
   renderHistory(state.trips);
 
@@ -390,7 +474,21 @@ function render() {
 
 /* ---------- actions ---------- */
 
-ui.plus.addEventListener('click', () => enqueue({ kind: 'add', at: new Date().toISOString() }));
+ui.plus.addEventListener('click', () => {
+  const op = { kind: 'add', at: new Date().toISOString() };
+  const pool = poolHere();
+  if (pool) {
+    op.pool = pool;
+  } else if (position) {
+    /* Somewhere the app does not know. Name it once and it is recognised from
+       then on — which is how pools missing from the built-in survey get in. */
+    const name = prompt(t(lang, 'pool.newPrompt'), '');
+    if (name && name.trim()) {
+      op.pool = { id: idFor(name, view().pools), name: name.trim(), lat: position.lat, lon: position.lon };
+    }
+  }
+  enqueue(op);
+});
 ui.minus.addEventListener('click', () => {
   if (view().trips.length) enqueue({ kind: 'remove' });
 });
@@ -508,6 +606,7 @@ function askForToken() {
 ui.langSelect.value = lang;
 applyStaticStrings();
 bindChartTooltip(ui.chart);
+startWatching();
 loadCache();
 render();
 /* flush() first: anything logged offline before the app was last closed is
@@ -520,5 +619,10 @@ loadRates();
 
 setInterval(poll, POLL_MS);
 setInterval(loadRates, RATES_MS);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { flush(); poll({ force: true }); } });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { stopWatching(); return; }
+  startWatching();
+  flush();
+  poll({ force: true });
+});
 window.addEventListener('online', () => { flush(); poll({ force: true }); });

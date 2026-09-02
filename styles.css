@@ -455,3 +455,45 @@ h1 {
 }
 
 .trip-row--readonly { grid-template-columns: 2.2rem 1fr; }
+
+/* ---- location + pool table ---- */
+
+.here {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink-dim);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.here[data-state="here"] { color: var(--accent); font-weight: 600; }
+
+.pool-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  font-variant-numeric: tabular-nums;
+}
+.pool-row + .pool-row { border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.pool-row .pool-name { font-size: 15px; }
+.pool-row .pool-name.is-muted { color: var(--ink-dim); font-style: italic; }
+.pool-row .pool-count { font-size: 15px; font-weight: 600; }
+
+/* A share-of-total bar, so the table reads at a glance. One series, one hue. */
+.pool-bar {
+  width: 64px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chart-mark) 14%, transparent);
+  overflow: hidden;
+}
+.pool-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--chart-mark);
+}
+
+.pool-empty { color: var(--ink-dim); font-size: 14px; padding: 14px 0; }

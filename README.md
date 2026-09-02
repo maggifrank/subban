@@ -95,6 +95,31 @@ required lightness band against the dark card surface.
 
 The history panel below is the chart's table view — same data, every trip listed.
 
+## Pools
+
+Tapping **+** attaches the pool you're standing at. The app keeps a position
+warm while it is on screen, so the check-in resolves immediately rather than
+making the count wait on a GPS fix, and a line under the counter says what it
+thinks — *You're at Laugardalslaug*, *No known pool nearby*, or *Location
+unavailable* — so it is never guessing behind your back.
+
+`lib/pools.js` carries coordinates for the Reykjavík-area pools, taken from
+OpenStreetMap. That list is **not exhaustive** — OSM tags these inconsistently
+(Laugardalslaug is a `shelter`, Sundhöll Reykjavíkur a `sauna`) and some, like
+Árbæjarlaug, are missing entirely. So anywhere unknown, the app asks for a name
+once, remembers the coordinates, and recognises it from then on. Nothing is
+matched further than 250 m, which absorbs the fact that an OSM point sits
+somewhere inside a complex rather than at its door.
+
+A table at the bottom counts visits per pool, most-visited first, with anything
+logged without a pool last. Trips recorded before this existed, or with location
+switched off, simply have no pool — the count is unaffected.
+
+**Pools never reach the public site.** Which pool says which neighbourhood you
+were in, so `bin/publish.mjs` drops the pool from every trip and publishes an
+empty pool list, the same way it drops the time. Nothing is hidden in the page
+that isn't also absent from `state.json`.
+
 ## History
 
 Every trip is timestamped, and the **History** panel lists them newest-first,

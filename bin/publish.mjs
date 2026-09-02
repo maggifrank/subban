@@ -49,15 +49,22 @@ async function get(pathname) {
   return res.json();
 }
 
-/* Publish the date a swim happened, not the hour. The exact times are a fairly
-   detailed picture of someone's week, and nothing on the public page needs
-   them. Anchoring at local midday keeps the date and the count while dropping
-   the time, and matches the convention backdated trips already use. */
-function stripTimes(trips) {
-  return trips.map((iso) => {
-    const d = new Date(iso);
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0).toISOString();
-  }).sort();
+/* Publish the date a swim happened — not the hour, and not the pool.
+ *
+ * The exact times are a fairly detailed picture of someone's week, and which
+ * pool says which neighbourhood they were in. Neither is needed by anything on
+ * the public page: the count, cost per trip, break-even and the monthly chart
+ * all work off dates alone. Both are dropped from the snapshot rather than
+ * hidden in the page, or they would still sit in state.json for anyone who
+ * opened it directly.
+ *
+ * Anchoring at local midday keeps the date and the count while dropping the
+ * time, and matches the convention backdated trips already use. */
+function publicTrips(trips) {
+  return trips.map((trip) => {
+    const d = new Date(typeof trip === 'string' ? trip : trip.at);
+    return { at: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0).toISOString() };
+  }).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
 /* Only the files the read-only page needs. lib/api.js, lib/rates.js, serve.js
@@ -91,7 +98,7 @@ async function build(state, rates) {
   await fs.mkdir(path.join(DIST, 'lib'), { recursive: true });
   for (const [from, to] of COPY) await fs.copyFile(path.join(ROOT, from), path.join(DIST, to));
   await fs.writeFile(path.join(DIST, 'state.json'), JSON.stringify({
-    ...state, trips: stripTimes(state.trips), generatedAt: new Date().toISOString()
+    ...state, trips: publicTrips(state.trips), pools: [], generatedAt: new Date().toISOString()
   }, null, 2));
   await fs.writeFile(path.join(DIST, 'rates.json'), JSON.stringify(rates, null, 2));
   await fs.writeFile(path.join(DIST, 'netlify.toml'), NETLIFY_TOML);

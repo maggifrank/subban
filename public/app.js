@@ -3,7 +3,7 @@
    hiding buttons. All the arithmetic, wording and the chart come from the same
    lib/ modules the private app uses, so the two cannot disagree. */
 
-import { normalize, costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips } from './lib/state.js';
+import { normalize, costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, tripAt } from './lib/state.js';
 import { LANGS, LANG_NAMES, detectLang, t, plural, ordinal, formatDate } from './lib/i18n.js';
 import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/chart.js';
@@ -65,11 +65,11 @@ function renderHistory(trips) {
   ui.historySummary.textContent = trips.length
     ? t(lang, 'history.summary', {
         trips: plural(lang, trips.length, 'trip'),
-        date: formatDate(lang, trips[trips.length - 1], 'full')
+        date: formatDate(lang, tripAt(trips[trips.length - 1]), 'full')
       })
     : t(lang, 'history.none');
 
-  const sig = lang + '|' + trips.join('|');
+  const sig = lang + '|' + trips.map(tripAt).join('|');
   if (ui.historyBody.hidden || sig === historySig) return;
   historySig = sig;
 
@@ -81,12 +81,12 @@ function renderHistory(trips) {
   // Newest first, but numbered in the order the swims happened.
   const rows = [];
   let openMonth = null;
-  trips.forEach((iso, i) => {
-    const d = new Date(iso);
+  trips.forEach((trip, i) => {
+    const d = new Date(tripAt(trip));
     const key = monthKey(d);
     if (key !== openMonth) {
       openMonth = key;
-      const n = trips.filter((x) => monthKey(new Date(x)) === key).length;
+      const n = trips.filter((x) => monthKey(new Date(tripAt(x))) === key).length;
       rows.push({ month: formatDate(lang, d, 'month'), count: plural(lang, n, 'trip'), items: [] });
     }
     /* Dates only. The snapshot has no real times in it either — see
@@ -148,7 +148,7 @@ function render() {
 
   ui.trips.textContent = n;
   ui.lastSwim.textContent = n
-    ? t(lang, 'counter.lastSwim', { date: formatDate(lang, trips[n - 1], 'full') })
+    ? t(lang, 'counter.lastSwim', { date: formatDate(lang, tripAt(trips[n - 1]), 'full') })
     : t(lang, 'counter.none');
 
   const cpt = costPerTrip(s, n);
