@@ -1,7 +1,7 @@
 .DS_Store
 node_modules/
 *.log
-subban-*.json
+sund-*.json
 data/
 
 # Local Netlify folder

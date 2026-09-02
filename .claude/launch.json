@@ -2,13 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "subban",
+      "name": "sund",
       "runtimeExecutable": "node",
       "runtimeArgs": ["serve.js"],
       "port": 8080
     },
     {
-      "name": "subban-public",
+      "name": "sund-public",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["-y", "http-server", "dist", "-p", "8091", "-c-1", "--silent"],
       "port": 8091

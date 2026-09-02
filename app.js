@@ -1,4 +1,4 @@
-/* Subban front end. The count lives on the server so every device sees the same
+/* Sund front end. The count lives on the server so every device sees the same
    number; taps apply optimistically and sync in the background, so the app
    still works with a phone in a pool changing room on one bar of signal. */
 
@@ -14,18 +14,22 @@ import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/chart.js';
 import { matchPool, idFor, allPools } from './lib/pools.js';
 
-const CACHE_KEY = 'subban.cache.v2';
-const TOKEN_KEY = 'subban.token';
-const LANG_KEY = 'subban.lang';
+const CACHE_KEY = 'sund.cache.v2';
+const TOKEN_KEY = 'sund.token';
+const LANG_KEY = 'sund.lang';
 const POLL_MS = 15000;
 const RATES_MS = 30 * 60 * 1000;   // the server caches for 12h; this is just a nudge
 
-/* The app was called "sund" before; carry a device's existing preferences and
-   any queued offline taps over to the new key names once, so the rename doesn't
-   quietly drop swims that hadn't synced yet. */
+/* The app was called "subban" for a while; carry a device's existing
+   preferences and any queued offline taps across to the current key names once,
+   so the rename does not quietly drop swims that had not synced yet. Written
+   out by hand rather than renamed with everything else: a blind substitution
+   would make `from` and `to` identical, and the removeItem below would then
+   delete the live value on every load. */
 function migrateStorageKeys() {
-  const moves = [['sund.cache.v2', CACHE_KEY], ['sund.token', TOKEN_KEY], ['sund.lang', LANG_KEY]];
+  const moves = [['subban.cache.v2', CACHE_KEY], ['subban.token', TOKEN_KEY], ['subban.lang', LANG_KEY]];
   for (const [from, to] of moves) {
+    if (from === to) continue;
     const old = localStorage.getItem(from);
     if (old !== null && localStorage.getItem(to) === null) localStorage.setItem(to, old);
     localStorage.removeItem(from);
@@ -649,7 +653,7 @@ ui.exportBtn.addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(view(), null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `subban-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `sund-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
 });

@@ -1,4 +1,4 @@
-# Subban
+# Sund
 
 A swim-trip tracker. Tap **+** after each visit and watch the yearly membership
 turn from an expensive mistake into a bargain.
@@ -6,7 +6,7 @@ turn from an expensive mistake into a bargain.
 The count is **shared across devices** — log a swim on your phone at the pool,
 see it on your laptop at home.
 
-It runs in two places behind **one address**, <https://subban.talva.is>. Inside
+It runs in two places behind **one address**, <https://sund.talva.is>. Inside
 the LAN that name resolves to the container and you get the full read/write app.
 From outside it resolves to Netlify and you get a read-only snapshot, with no
 API behind it to write to. Same URL, two faces, decided by DNS.
@@ -221,7 +221,7 @@ Then open <http://localhost:8080>. Still no `npm install` needed — `serve.js`
 uses only the Node standard library. The `@netlify/blobs` dependency in
 `package.json` is imported solely by the Netlify function.
 
-State is written to `data/state.json`, or wherever `SUBBAN_DATA` points.
+State is written to `data/state.json`, or wherever `SUND_DATA` points.
 
 ### In an LXC container
 
@@ -230,25 +230,25 @@ codes, backups and troubleshooting. The short version:
 
 ```bash
 apt-get install -y nodejs git
-git clone https://github.com/maggifrank/subban.git /opt/subban
-cp /opt/subban/deploy/subban.service /etc/systemd/system/
-systemctl enable --now subban
+git clone https://github.com/maggifrank/sund.git /opt/sund
+cp /opt/sund/deploy/sund.service /etc/systemd/system/
+systemctl enable --now sund
 ```
 
 It listens on `0.0.0.0:8080`, so every device on the LAN — including the phone in
 your swim bag — points at the container's IP and shares one count.
 
-The count lives in `/var/lib/subban/state.json`, not in the repo. Back up that file.
+The count lives in `/var/lib/sund/state.json`, not in the repo. Back up that file.
 
-Install `deploy/subban-update.timer` as well and the container polls GitHub every
+Install `deploy/sund-update.timer` as well and the container polls GitHub every
 five minutes, deploying anything you push — with a health check and automatic
 rollback if the new revision won't start. See [DEPLOY.md](DEPLOY.md).
 
 ## The public read-only site
 
-<https://subban.talva.is> from outside the LAN — a snapshot of the count, the
+<https://sund.talva.is> from outside the LAN — a snapshot of the count, the
 cost per trip, break-even and the chart, with no way to change anything. Its
-direct Netlify address is <https://subban-swim.netlify.app>.
+direct Netlify address is <https://sund-swim.netlify.app>.
 
 The same hostname serves the private app inside the LAN, through split-horizon
 DNS: internally it resolves to Caddy and on to the container, externally to
@@ -295,7 +295,7 @@ Publishing is **event-driven**: `serve.js` touches a trigger file after every
 change and a systemd path unit republishes within seconds. A six-hourly timer
 remains as a safety net, so `--if-changed` still guards against redundant
 deploys — it compares the trip count *and* the ECB rate date, so the safety net
-also refreshes a stale rate when nobody has been swimming. Set `SUBBAN_TOKEN` if the source instance requires
+also refreshes a stale rate when nobody has been swimming. Set `SUND_TOKEN` if the source instance requires
 an access code, and `NETLIFY_AUTH_TOKEN` to deploy from a machine without the
 Netlify CLI signed in.
 
@@ -307,18 +307,18 @@ file, claiming `/api/*` through the function's own `config.path`. It is unused �
 the app runs on the LXC — but kept working as an escape hatch.
 
 > **Do not run `netlify deploy` from this directory.** The repo's `.netlify`
-> link points at `subban-swim`, which is the *public read-only site*. A deploy
+> link points at `sund-swim`, which is the *public read-only site*. A deploy
 > from here would replace that static snapshot with the read/write app and put
 > an API on a public URL. Publishing is done by `bin/publish.mjs`, which uploads
 > an explicit file list and refuses to finish if a function lands in the deploy.
 
 If you ever do want the whole app on Netlify, create a **separate site** for it,
-and set `SUBBAN_TOKEN` in its environment first — otherwise anyone who finds the
+and set `SUND_TOKEN` in its environment first — otherwise anyone who finds the
 URL can edit the count.
 
 ## The access code
 
-Optional, off by default. Set `SUBBAN_TOKEN` on the server (systemd `Environment=`,
+Optional, off by default. Set `SUND_TOKEN` on the server (systemd `Environment=`,
 or Netlify environment variables) and every device will prompt for it once and
 remember it. Without it the API is open to anyone who can reach the port.
 
@@ -348,7 +348,7 @@ your count, and is a shared code rather than real per-user accounts.
   attributing a long backlog is one tap per trip.
 - **Export has no matching import.** Settings offers *Export data*, which writes
   the current state as JSON, but there is no way to load one back through the
-  app. Restoring means writing the file to `/var/lib/subban/state.json` and
+  app. Restoring means writing the file to `/var/lib/sund/state.json` and
   restarting — see [DEPLOY.md](DEPLOY.md).
 - **Which pools count is fixed in code.** `card: true` in `lib/pools.js` marks
   the three the membership covers. There is no way to change that from the app,
@@ -371,7 +371,7 @@ your count, and is a shared code rather than real per-user accounts.
 | `serve.js` | LXC backend — static files + API, file-backed, no dependencies |
 | `netlify/functions/trips.js` | unused Netlify backend — same API, Blobs-backed |
 | `bin/publish.mjs` | snapshot, build and deploy the public site |
-| `deploy/subban.service` | the app |
-| `deploy/subban-update.*` | poll GitHub every 5 min, deploy with rollback |
-| `deploy/subban-publish.*` | publish the public snapshot every 15 min |
+| `deploy/sund.service` | the app |
+| `deploy/sund-update.*` | poll GitHub every 5 min, deploy with rollback |
+| `deploy/sund-publish.*` | publish the public snapshot every 15 min |
 | `DEPLOY.md` | LXC deployment runbook |

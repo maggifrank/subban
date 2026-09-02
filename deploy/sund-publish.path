@@ -2,18 +2,18 @@
 # this file after every write, so a swim reaches the public page in seconds
 # without anything polling for something that happens a few times a week.
 [Unit]
-Description=Watch for Subban changes to publish
+Description=Watch for Sund changes to publish
 
 [Path]
 # Both paths on purpose. Under DynamicUser=true the state directory really lives
-# at /var/lib/private/subban with /var/lib/subban as a symlink to it; without
-# DynamicUser it is a plain directory at /var/lib/subban. Watching both covers
+# at /var/lib/private/sund with /var/lib/sund as a symlink to it; without
+# DynamicUser it is a plain directory at /var/lib/sund. Watching both covers
 # either arrangement, and a path that does not exist is simply waited on.
 # Duplicate triggers are harmless: the publisher's --if-changed makes a
 # redundant run a no-op.
-PathModified=/var/lib/subban/publish-trigger
-PathModified=/var/lib/private/subban/publish-trigger
-Unit=subban-publish.service
+PathModified=/var/lib/sund/publish-trigger
+PathModified=/var/lib/private/sund/publish-trigger
+Unit=sund-publish.service
 
 [Install]
 WantedBy=paths.target

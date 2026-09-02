@@ -1,6 +1,6 @@
-# Deploying Subban to an LXC container
+# Deploying Sund to an LXC container
 
-Subban needs Node 18+ and nothing else — no `npm install`, no database, no reverse
+Sund needs Node 18+ and nothing else — no `npm install`, no database, no reverse
 proxy. A 512 MB container is generous.
 
 Everything below is identical across LXC flavours once you have a shell in the
@@ -15,7 +15,7 @@ Proxmox:
 
 ```
 pct create 110 local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
-  --hostname subban --cores 1 --memory 512 --rootfs local-lvm:4 \
+  --hostname sund --cores 1 --memory 512 --rootfs local-lvm:4 \
   --net0 name=eth0,bridge=vmbr0,ip=dhcp --unprivileged 1 \
   --features nesting=1 --start 1
 ```
@@ -23,14 +23,14 @@ pct create 110 local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
 LXD / Incus:
 
 ```
-lxc launch images:debian/12 subban
+lxc launch images:debian/12 sund
 ```
 
 ## 2. Get a shell inside
 
 ```
 pct enter 110          # Proxmox
-lxc exec subban -- bash  # LXD / Incus
+lxc exec sund -- bash  # LXD / Incus
 ```
 
 Everything from here runs **inside the container**.
@@ -53,7 +53,7 @@ step 5 to match.
 ## 4. Clone
 
 ```
-git clone https://github.com/maggifrank/subban.git /opt/subban
+git clone https://github.com/maggifrank/sund.git /opt/sund
 ```
 
 The repo is public, so no keys or tokens are needed.
@@ -61,14 +61,14 @@ The repo is public, so no keys or tokens are needed.
 ## 5. Install and start the service
 
 ```
-cp /opt/subban/deploy/subban.service /etc/systemd/system/
+cp /opt/sund/deploy/sund.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now subban
-systemctl status subban --no-pager
+systemctl enable --now sund
+systemctl status sund --no-pager
 ```
 
-The unit runs as a `DynamicUser` with `ProtectSystem=strict`, so `/opt/subban`
-stays read-only and the count is written to `/var/lib/subban/state.json` via
+The unit runs as a `DynamicUser` with `ProtectSystem=strict`, so `/opt/sund`
+stays read-only and the count is written to `/var/lib/sund/state.json` via
 `StateDirectory`.
 
 ## 6. Check it
@@ -85,14 +85,14 @@ the same count, and a swim logged on one appears on the other within 15 seconds 
 immediately if you switch to the app rather than leaving it in the background.
 
 If `curl` works inside the container but nothing else on the LAN can reach it,
-the problem is the host firewall, not Subban.
+the problem is the host firewall, not Sund.
 
 ## 7. Access code (optional on a trusted LAN)
 
-Uncomment and set `SUBBAN_TOKEN` in `/etc/systemd/system/subban.service`:
+Uncomment and set `SUND_TOKEN` in `/etc/systemd/system/sund.service`:
 
 ```
-systemctl daemon-reload && systemctl restart subban
+systemctl daemon-reload && systemctl restart sund
 ```
 
 Each device prompts for the code once and remembers it. Without it, anyone who
@@ -104,7 +104,7 @@ getting 401s and the public site will quietly stop updating with no visible
 error on the page:
 
 ```
-printf 'SUBBAN_TOKEN=the-same-code\n' >> /etc/subban-publish.env
+printf 'SUND_TOKEN=the-same-code\n' >> /etc/sund-publish.env
 ```
 
 ## Updating
@@ -112,7 +112,7 @@ printf 'SUBBAN_TOKEN=the-same-code\n' >> /etc/subban-publish.env
 Manually:
 
 ```
-cd /opt/subban && git pull && systemctl restart subban
+cd /opt/sund && git pull && systemctl restart sund
 ```
 
 **Code changes deploy themselves; unit files do not.** The updater pulls the
@@ -120,18 +120,18 @@ repo and restarts the service, but never touches `/etc/systemd/system`. After a
 commit that changes anything under `deploy/`, copy it across by hand:
 
 ```
-cp /opt/subban/deploy/<changed-unit> /etc/systemd/system/ && systemctl daemon-reload
+cp /opt/sund/deploy/<changed-unit> /etc/systemd/system/ && systemctl daemon-reload
 ```
 
 ### Automatically
 
-`subban-update.timer` checks GitHub every 5 minutes and deploys anything new.
+`sund-update.timer` checks GitHub every 5 minutes and deploys anything new.
 Install it once:
 
 ```
-cp /opt/subban/deploy/subban-update.service /opt/subban/deploy/subban-update.timer /etc/systemd/system/
+cp /opt/sund/deploy/sund-update.service /opt/sund/deploy/sund-update.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now subban-update.timer
+systemctl enable --now sund-update.timer
 ```
 
 From then on, pushing to `main` from your laptop puts the change on the
@@ -145,21 +145,21 @@ previous revision and that revision is recorded as failed, so a bad push
 restarts the service once rather than every five minutes forever — push a fix
 and the next run picks it up and clears the mark.
 
-If you have edited files directly in `/opt/subban`, the update refuses to
+If you have edited files directly in `/opt/sund`, the update refuses to
 fast-forward and leaves both your changes and the running service alone. Commit
 or discard them and it resumes.
 
 Check on it:
 
 ```
-systemctl list-timers subban-update.timer
+systemctl list-timers sund-update.timer
 ```
 
 ```
-journalctl -u subban-update -n 50 --no-pager
+journalctl -u sund-update -n 50 --no-pager
 ```
 
-To pause automatic deploys: `systemctl disable --now subban-update.timer`.
+To pause automatic deploys: `systemctl disable --now sund-update.timer`.
 
 ## Publishing the public read-only site
 
@@ -174,11 +174,11 @@ putting the token in it, so it is never briefly world-readable and never lands
 in your shell history:
 
 ```
-install -m 600 /dev/null /etc/subban-publish.env
+install -m 600 /dev/null /etc/sund-publish.env
 ```
 
 ```
-nano /etc/subban-publish.env
+nano /etc/sund-publish.env
 ```
 
 with a single line:
@@ -190,12 +190,12 @@ NETLIFY_AUTH_TOKEN=nfp_your_token_here
 Then install the watcher and its safety-net timer:
 
 ```
-cp /opt/subban/deploy/subban-publish.service /opt/subban/deploy/subban-publish.path /opt/subban/deploy/subban-publish.timer /etc/systemd/system/
+cp /opt/sund/deploy/sund-publish.service /opt/sund/deploy/sund-publish.path /opt/sund/deploy/sund-publish.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now subban-publish.path subban-publish.timer
+systemctl enable --now sund-publish.path sund-publish.timer
 ```
 
-`subban-publish.path` does the real work: `serve.js` touches
+`sund-publish.path` does the real work: `serve.js` touches
 `publish-trigger` in its state directory after every change, and the path unit
 republishes within seconds. The timer is only a backstop for a trigger missed
 while the publisher was down, and for the daily ECB rate when nobody has been
@@ -204,11 +204,11 @@ swimming — four no-op runs a day.
 Check the watcher is armed:
 
 ```
-systemctl status subban-publish.path --no-pager
+systemctl status sund-publish.path --no-pager
 ```
 
 `Active: active (waiting)` is what you want. Log a swim and
-`journalctl -u subban-publish -n 5 --no-pager` should show a deploy within
+`journalctl -u sund-publish -n 5 --no-pager` should show a deploy within
 seconds. If it never fires, the path unit is not seeing the file — the six-hour
 timer still keeps the page current meanwhile, so nothing is broken while you
 look into it.
@@ -216,7 +216,7 @@ look into it.
 Publish immediately rather than waiting for the first tick:
 
 ```
-systemctl start subban-publish.service && journalctl -u subban-publish -n 5 --no-pager
+systemctl start sund-publish.service && journalctl -u sund-publish -n 5 --no-pager
 ```
 
 A successful run logs `deployed <id> to https://... — no functions, verified`.
@@ -229,7 +229,7 @@ wrong, clear the marker first, or the run will correctly decide there is nothing
 to do:
 
 ```
-rm -f /var/lib/subban-publish/last.json && systemctl start subban-publish.service
+rm -f /var/lib/sund-publish/last.json && systemctl start sund-publish.service
 ```
 
 The site id is set in the unit; only the token lives in the environment file.
@@ -238,7 +238,7 @@ it grants deploy access to your Netlify account, nothing on the container.
 
 ## Backups
 
-The count lives in `/var/lib/subban/state.json`, **not** in `/opt/subban`. That
+The count lives in `/var/lib/sund/state.json`, **not** in `/opt/sund`. That
 one file is the only thing not reproducible from git — everything else can be
 thrown away and re-cloned.
 
@@ -247,8 +247,8 @@ app-specific setup. `serve.js` writes the file via a temp file and `rename()`,
 which is atomic on Linux, so a snapshot taken mid-write gets either the complete
 old file or the complete new one — never a half-written one.
 
-For a file-level copy, note that `/var/lib/subban` is a **symlink** into
-`/var/lib/private/subban` because the unit uses `DynamicUser=true`. Reading
+For a file-level copy, note that `/var/lib/sund` is a **symlink** into
+`/var/lib/private/sund` because the unit uses `DynamicUser=true`. Reading
 through the symlink is fine; restoring by replacing the symlink is not — see the
 `STATE_DIRECTORY` entry under Troubleshooting.
 
@@ -259,9 +259,9 @@ service is running:
 
 ```
 curl -s http://<old-host>:8080/api/state | ssh root@<container-ip> \
-  'systemctl stop subban && cat > /var/lib/subban/state.json &&
-   chown --reference=/var/lib/private/subban /var/lib/private/subban/state.json &&
-   systemctl start subban'
+  'systemctl stop sund && cat > /var/lib/sund/state.json &&
+   chown --reference=/var/lib/private/sund /var/lib/private/sund/state.json &&
+   systemctl start sund'
 ```
 
 The `chown` is not optional. Written as root, the file lands owned by root while
@@ -277,31 +277,31 @@ file to the same path, with the same `chown` afterwards.
 **Service won't start, `DynamicUser` or `ProtectSystem` errors.** Older systemd
 in an unprivileged container may not support the hardening options. Comment out
 `DynamicUser=true`, `ProtectSystem=strict` and `ProtectHome=true`, add
-`User=root`, then `systemctl daemon-reload && systemctl restart subban`. You lose
+`User=root`, then `systemctl daemon-reload && systemctl restart sund`. You lose
 some isolation but it will run.
 
 **`SyntaxError: Unexpected token` or `Cannot use import statement`.** Node is
 too old — check `node --version` is 18 or newer.
 
 **Count resets to zero after a restart.** The state file isn't writable. Check
-`journalctl -u subban` for `write failed:` and confirm `/var/lib/subban` exists and
+`journalctl -u sund` for `write failed:` and confirm `/var/lib/sund` exists and
 is owned by the service user.
 
 **`status=238/STATE_DIRECTORY`, journal says `Failed to set up special
 execution directory in /var/lib: File exists`.** Something is sitting where
 systemd wants to manage its own state directory. Because the unit uses
-`DynamicUser=true`, the real directory is `/var/lib/private/subban` and
-`/var/lib/subban` is only a **symlink** to it — so moving or restoring
-`/var/lib/subban` by hand leaves a stale entry systemd refuses to touch.
+`DynamicUser=true`, the real directory is `/var/lib/private/sund` and
+`/var/lib/sund` is only a **symlink** to it — so moving or restoring
+`/var/lib/sund` by hand leaves a stale entry systemd refuses to touch.
 
 Fix it in `/var/lib/private`, not `/var/lib`:
 
 ```
-systemctl stop subban
-rm -f /var/lib/subban                 # a symlink, not your data
-mv /var/lib/private/<old> /var/lib/private/subban
-chown --reference=/var/lib/private/subban /var/lib/private/subban/state.json
-systemctl start subban
+systemctl stop sund
+rm -f /var/lib/sund                 # a symlink, not your data
+mv /var/lib/private/<old> /var/lib/private/sund
+chown --reference=/var/lib/private/sund /var/lib/private/sund/state.json
+systemctl start sund
 ```
 
 Check the destination does not already exist before that `mv` — if it does, `mv`
@@ -314,5 +314,5 @@ to save.
 **Logs:**
 
 ```
-journalctl -u subban -f
+journalctl -u sund -f
 ```

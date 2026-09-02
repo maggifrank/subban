@@ -1,4 +1,4 @@
-/* Read-only Subban. No API, no writes — the data is a static snapshot written
+/* Read-only Sund. No API, no writes — the data is a static snapshot written
    at publish time, so this page is read-only by construction rather than by
    hiding buttons. All the arithmetic, wording and the chart come from the same
    lib/ modules the private app uses, so the two cannot disagree. */
@@ -8,7 +8,7 @@ import { LANGS, LANG_NAMES, detectLang, t, plural, ordinal, formatDate } from '.
 import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/chart.js';
 
-const LANG_KEY = 'subban.lang';
+const LANG_KEY = 'sund.lang';
 
 let snapshot = { trips: [], settings: null, generatedAt: null };
 let rates = null;

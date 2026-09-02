@@ -11,10 +11,10 @@
  *
  * Env:
  *   NETLIFY_AUTH_TOKEN   required to deploy (falls back to a logged-in CLI)
- *   SUBBAN_NETLIFY_SITE  site id (falls back to .netlify/state.json)
- *   SUBBAN_SOURCE        instance to snapshot (default http://localhost:8080)
- *   SUBBAN_DIST          where to build (default ./dist)
- *   SUBBAN_TOKEN         access code, if the source instance requires one
+ *   SUND_NETLIFY_SITE  site id (falls back to .netlify/state.json)
+ *   SUND_SOURCE        instance to snapshot (default http://localhost:8080)
+ *   SUND_DIST          where to build (default ./dist)
+ *   SUND_TOKEN         access code, if the source instance requires one
  */
 
 import { normalize, cardTrips } from '../lib/state.js';
@@ -25,7 +25,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DIST = process.env.SUBBAN_DIST || path.join(ROOT, 'dist');
+const DIST = process.env.SUND_DIST || process.env.SUBBAN_DIST || path.join(ROOT, 'dist');
 const API = 'https://api.netlify.com/api/v1';
 
 const flag = (name) => process.argv.includes(name);
@@ -34,10 +34,10 @@ const arg = (name, fallback) => {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 };
 
-const SOURCE = arg('--source', process.env.SUBBAN_SOURCE || 'http://localhost:8080').replace(/\/$/, '');
+const SOURCE = arg('--source', process.env.SUND_SOURCE || 'http://localhost:8080').replace(/\/$/, '');
 const DEPLOY = flag('--deploy');
 const IF_CHANGED = arg('--if-changed', null);
-const SOURCE_TOKEN = process.env.SUBBAN_TOKEN || '';
+const SOURCE_TOKEN = process.env.SUND_TOKEN || process.env.SUBBAN_TOKEN || '';
 
 /* ---------- read the live instance ---------- */
 
@@ -156,6 +156,7 @@ async function authToken() {
 }
 
 async function siteId() {
+  if (process.env.SUND_NETLIFY_SITE) return process.env.SUND_NETLIFY_SITE;
   if (process.env.SUBBAN_NETLIFY_SITE) return process.env.SUBBAN_NETLIFY_SITE;
   const raw = await fs.readFile(path.join(ROOT, '.netlify', 'state.json'), 'utf8');
   return JSON.parse(raw).siteId;
