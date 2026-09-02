@@ -97,6 +97,17 @@ The history panel below is the chart's table view — same data, every trip list
 
 ## Pools
 
+**The card only covers three pools** — Suðurbæjarlaug, Sundhöll Hafnarfjarðar
+and Ásvallalaug, all in Hafnarfjörður. Only swims at those pay it off, so only
+those feed the big counter, the cost per trip, break-even and the ahead/behind
+figure. Anywhere else is logged for the record and shows in the chart, the
+history and the pool table, but never in the money. The counter card says how
+many of those there are, and the pool table tags them.
+
+A trip with no pool attached — anything logged before this existed, or with
+location switched off — still counts, which is what it did before. The app never
+silently drops a swim because it could not work out where you were.
+
 Tapping **+** attaches the pool you're standing at. The app keeps a position
 warm while it is on screen, so the check-in resolves immediately rather than
 making the count wait on a GPS fix, and a line under the counter says what it
@@ -119,6 +130,12 @@ switched off, simply have no pool — the count is unaffected.
 were in, so `bin/publish.mjs` drops the pool from every trip and publishes an
 empty pool list, the same way it drops the time. Nothing is hidden in the page
 that isn't also absent from `state.json`.
+
+The public snapshot also contains **only the trips that count toward the card**.
+That page is about what the membership costs per swim, so publishing the for-fun
+ones would make its arithmetic disagree with the app — and stripping the pool
+while keeping the trip would leave no way to tell them apart. Its monthly chart
+therefore shows card swims only, where the app's shows everything.
 
 ## History
 
@@ -301,6 +318,9 @@ your count, and is a shared code rather than real per-user accounts.
 - **The public page can be up to six hours behind on exchange rates.** The count
   itself republishes within seconds of a swim; only the ECB rate waits for the
   safety-net timer, and the page always names the rate's date.
+- **Which pools count is fixed in code.** `card: true` in `lib/pools.js` marks
+  the three the membership covers. There is no way to change that from the app,
+  so a new card covering different pools means editing that file.
 - **No membership start date.** The app counts trips, not the year they belong
   to. When the membership renews, use **Reset trips** to start the new season.
 

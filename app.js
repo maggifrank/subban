@@ -4,7 +4,7 @@
 
 import {
   emptyState, normalize, addTrip, removeLastTrip, removeTripAt, clearTrips, updateSettings,
-  costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, poolCounts, tripAt
+  costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, poolCounts, tripAt, cardTrips
 } from './lib/state.js';
 import {
   LANGS, LANG_NAMES, DEFAULT_LANG, detectLang, t, plural, ordinal, formatDate, formatTime
@@ -168,7 +168,7 @@ const ui = {
   cardPerTrip: el('card-per-trip'), cardPerTripSub: el('card-per-trip-sub'),
   delta: el('delta'), deltaSub: el('delta-sub'),
   sync: el('sync'), syncText: el('sync-text'), langSelect: el('lang-select'),
-  rateNote: el('rate-note'), here: el('here'), poolTable: el('pool-table'),
+  rateNote: el('rate-note'), here: el('here'), poolTable: el('pool-table'), offCard: el('off-card'),
   chart: el('chart'),
   historyToggle: el('history-toggle'), historyPanel: el('history-panel'), historyBody: el('history-body'),
   historySummary: el('history-summary'),
@@ -321,6 +321,14 @@ function renderPools(state) {
     const name = el.querySelector('.pool-name');
     name.textContent = row.name ?? t(lang, 'pool.unattributed');
     name.classList.toggle('is-muted', row.name === null);
+    el.classList.toggle('is-off-card', !row.card);
+    if (!row.card) {
+      const tag = document.createElement('span');
+      tag.className = 'pool-tag';
+      tag.textContent = t(lang, 'pool.forFun');
+      name.after(tag);
+      el.style.gridTemplateColumns = '1fr auto auto auto';
+    }
     el.querySelector('.pool-bar > span').style.width = `${(row.count / most) * 100}%`;
     el.querySelector('.pool-count').textContent = row.count;
     frag.append(el);
@@ -413,7 +421,12 @@ function reverseKeepingMonths(nodes) {
 function render() {
   const state = view();
   const s = state.settings;
-  const n = state.trips.length;
+  /* Only the three pools the card covers pay it off. Everything else is logged
+     for the record — it shows in the chart, the history and the pool table, but
+     never in the money. */
+  const counting = cardTrips(state);
+  const n = counting.length;
+  const offCard = state.trips.length - n;
   const be = breakEvenTrips(s);
   const cashBe = cashBreakEvenTrips(s);
   const perCardTrip = cardPerTrip(s);
@@ -421,9 +434,11 @@ function render() {
 
   ui.trips.textContent = n;
   ui.minus.disabled = n === 0;
-  ui.lastSwim.textContent = n
-    ? t(lang, 'counter.lastSwim', { date: formatDate(lang, tripAt(state.trips[n - 1]), 'full') })
+  ui.lastSwim.textContent = state.trips.length
+    ? t(lang, 'counter.lastSwim', { date: formatDate(lang, tripAt(state.trips[state.trips.length - 1]), 'full') })
     : t(lang, 'counter.none');
+  ui.offCard.hidden = offCard === 0;
+  ui.offCard.textContent = offCard ? t(lang, 'counter.offCard', { trips: plural(lang, offCard, 'trip') }) : '';
 
   const cpt = costPerTrip(s, n);
   ui.costPerTrip.textContent = cpt === null ? '—' : money(lang, cpt, rates);

@@ -17,6 +17,7 @@
  *   SUBBAN_TOKEN         access code, if the source instance requires one
  */
 
+import { normalize, cardTrips } from '../lib/state.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -60,8 +61,8 @@ async function get(pathname) {
  *
  * Anchoring at local midday keeps the date and the count while dropping the
  * time, and matches the convention backdated trips already use. */
-function publicTrips(trips) {
-  return trips.map((trip) => {
+function publicTrips(state) {
+  return cardTrips(normalize(state)).map((trip) => {
     const d = new Date(typeof trip === 'string' ? trip : trip.at);
     return { at: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0).toISOString() };
   }).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
@@ -98,7 +99,7 @@ async function build(state, rates) {
   await fs.mkdir(path.join(DIST, 'lib'), { recursive: true });
   for (const [from, to] of COPY) await fs.copyFile(path.join(ROOT, from), path.join(DIST, to));
   await fs.writeFile(path.join(DIST, 'state.json'), JSON.stringify({
-    ...state, trips: publicTrips(state.trips), pools: [], generatedAt: new Date().toISOString()
+    ...state, trips: publicTrips(state), pools: [], generatedAt: new Date().toISOString()
   }, null, 2));
   await fs.writeFile(path.join(DIST, 'rates.json'), JSON.stringify(rates, null, 2));
   await fs.writeFile(path.join(DIST, 'netlify.toml'), NETLIFY_TOML);
