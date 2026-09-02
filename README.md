@@ -159,6 +159,20 @@ reads as the previous day on any device west of UTC; midday leaves twelve hours
 of slack either way. Since a backdated entry has no real clock time, the history
 shows it as a date alone — only live taps display a time.
 
+## The saved data
+
+State is one JSON file. Every shape this app has ever written still loads:
+bare ISO strings from before pools existed, trip objects without a card flag,
+and the current form. `normalize()` in `lib/state.js` is the single entry point,
+and it drops anything malformed rather than refusing the file — a corrupt entry
+costs you that entry, not the whole history.
+
+Card membership is read from the built-in list first, not from the saved pool
+record. A pool saved before `card` existed carries no flag, and trusting the
+saved copy alone would silently stop counting real card swims the moment an
+older backup was restored. Which pools the card covers is a property of the
+card, not of whatever happens to be on disk.
+
 ## How syncing works
 
 Taps apply **instantly** and sync in the background, so the app stays usable on
@@ -318,6 +332,10 @@ your count, and is a shared code rather than real per-user accounts.
 - **The public page can be up to six hours behind on exchange rates.** The count
   itself republishes within seconds of a swim; only the ECB rate waits for the
   safety-net timer, and the page always names the rate's date.
+- **Export has no matching import.** Settings offers *Export data*, which writes
+  the current state as JSON, but there is no way to load one back through the
+  app. Restoring means writing the file to `/var/lib/subban/state.json` and
+  restarting — see [DEPLOY.md](DEPLOY.md).
 - **Which pools count is fixed in code.** `card: true` in `lib/pools.js` marks
   the three the membership covers. There is no way to change that from the app,
   so a new card covering different pools means editing that file.
