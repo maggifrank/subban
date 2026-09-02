@@ -280,7 +280,12 @@ node bin/publish.mjs --source http://<container-ip>:8080 --deploy
 
 It deploys through Netlify's file API rather than the CLI, uploading exactly the
 files it lists and nothing else, then asks Netlify what it actually published and
-**fails if any function is present**. Both of those exist because of a real
+**fails if any function is present**. It also walks the built module graph and
+**refuses to publish if an import points at a file the build does not contain** —
+that list of files is maintained by hand, so a shared module growing a new import
+would otherwise 404 in the browser, break the whole graph and render a blank
+page, while `state.json` kept serving perfectly and every other check looked
+fine. Both of those exist because of a real
 mistake: the CLI resolves its project base by walking up from the deploy
 directory, found `netlify/functions`, and put the read/write API on the public
 site even though `--dir dist` was passed. Enumerating the files makes that
