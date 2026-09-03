@@ -235,21 +235,37 @@ try {
   console.warn(`rates unavailable (${err.message}) — the page will show ISK`);
 }
 
-/* Republish on a new swim *or* a new ECB rate. Keying on the trip count alone
-   would freeze the published conversion at whatever it was when the last swim
-   was logged — a week of not swimming would leave a week-old rate on the page. */
-const marker = { rev: state.rev, rateDate: rates?.date ?? null };
+await build(state, rates);
+/* Fingerprint what was actually built, rather than just the trip count and rate
+   date. Those miss a code change entirely: a new app.js or pool list would sit
+   undeployed until the next swim happened to trigger a publish. generatedAt is
+   excluded because it moves on every build and would defeat the comparison. */
+async function fingerprint(dir) {
+  const files = (await listFiles(dir)).sort((a, b) => a.rel.localeCompare(b.rel));
+  const h = crypto.createHash('sha1');
+  for (const f of files) {
+    h.update(f.rel);
+    if (f.rel === '/state.json') {
+      const { generatedAt, ...rest } = JSON.parse(f.buf.toString());
+      h.update(JSON.stringify(rest));
+    } else {
+      h.update(f.buf);
+    }
+  }
+  return h.digest('hex');
+}
+
+const marker = { fingerprint: await fingerprint(DIST), rev: state.rev };
 
 if (IF_CHANGED) {
   let last = null;
   try { last = JSON.parse(await fs.readFile(IF_CHANGED, 'utf8')); } catch { /* first run */ }
-  if (last && last.rev === marker.rev && (last.rateDate ?? null) === marker.rateDate) {
-    console.log(`no change since rev ${marker.rev} (rate ${marker.rateDate ?? 'none'}) — nothing to publish`);
+  if (last && last.fingerprint === marker.fingerprint) {
+    console.log(`no change since rev ${marker.rev} — nothing to publish`);
     process.exit(0);
   }
 }
 
-await build(state, rates);
 const missing = await checkImports(DIST);
 if (missing.length) {
   console.error('REFUSING TO PUBLISH — the built module graph has holes:');
