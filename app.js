@@ -340,6 +340,15 @@ function renderPools(state) {
     el.querySelector('.pool-count').textContent = row.count;
     frag.append(el);
   }
+
+  const sum = rows.reduce((a, r) => a + r.count, 0);
+  const totalRow = document.createElement('div');
+  totalRow.className = 'pool-row pool-row--total';
+  totalRow.innerHTML = '<span class="pool-name"></span><span></span><span class="pool-count"></span>';
+  totalRow.querySelector('.pool-name').textContent = t(lang, 'pool.total');
+  totalRow.querySelector('.pool-count').textContent = sum;
+  frag.append(totalRow);
+
   ui.poolTable.replaceChildren(frag);
 }
 
@@ -455,8 +464,13 @@ function render() {
   ui.lastSwim.textContent = state.trips.length
     ? t(lang, 'counter.lastSwim', { date: formatDate(lang, tripAt(state.trips[state.trips.length - 1]), 'full') })
     : t(lang, 'counter.none');
-  ui.offCard.hidden = offCard === 0;
-  ui.offCard.textContent = offCard ? t(lang, 'counter.offCard', { trips: plural(lang, offCard, 'trip') }) : '';
+  /* The big number is card swims only, so state the total outright rather than
+     leaving it to be inferred from the difference. */
+  const total = state.trips.length;
+  ui.offCard.hidden = total === 0;
+  ui.offCard.textContent = offCard
+    ? `${t(lang, 'counter.total', { trips: plural(lang, total, 'trip') })} · ${t(lang, 'counter.offCard', { trips: plural(lang, offCard, 'trip') })}`
+    : t(lang, 'counter.total', { trips: plural(lang, total, 'trip') });
 
   const cpt = costPerTrip(s, n);
   ui.costPerTrip.textContent = cpt === null ? '—' : money(lang, cpt, rates);

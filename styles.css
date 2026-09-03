@@ -538,3 +538,10 @@ h1 {
   background: var(--bg);
   color: var(--ink);
 }
+
+.pool-row--total {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  font-weight: 600;
+}
+.pool-row--total .pool-name { color: var(--ink-dim); font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }

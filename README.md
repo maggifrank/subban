@@ -123,7 +123,9 @@ matched further than 250 m, which absorbs the fact that an OSM point sits
 somewhere inside a complex rather than at its door.
 
 A table at the bottom counts visits per pool, most-visited first, with anything
-logged without a pool last.
+logged without a pool last, and totals them. The counter card states the total
+too — the big number is card swims only, so the total is said outright rather
+than left to be worked out from the difference.
 
 Every row in History shows its pool and **can be tapped to change it** — pick
 another, or detach it entirely. That is how a backdated trip gets a pool at all
