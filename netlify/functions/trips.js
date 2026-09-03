@@ -55,7 +55,7 @@ export default async (req) => {
 
   const token = (req.headers.get('authorization') || '').replace(/^Bearer /, '');
   const { status, body: out } = await handle(
-    { method: req.method, path: pathname, body, token }, { store, rates }, process.env.SUND_TOKEN || process.env.SUBBAN_TOKEN || ''
+    { method: req.method, path: pathname, body, token }, { store, rates }, process.env.SUND_TOKEN || ''
   );
 
   return Response.json(out, { status, headers: { 'Cache-Control': 'no-store' } });

@@ -5,8 +5,8 @@
 # Env: SUND_REPO (default /opt/sund), SUND_URL (default http://127.0.0.1:8080)
 set -euo pipefail
 
-REPO="${SUND_REPO:-${SUBBAN_REPO:-/opt/sund}}"
-URL="${SUND_URL:-${SUBBAN_URL:-http://127.0.0.1:8080}}"
+REPO="${SUND_REPO:-/opt/sund}"
+URL="${SUND_URL:-http://127.0.0.1:8080}"
 # Remembers a revision that already failed here, so a bad push doesn't get
 # retried — and the service restarted — every time the timer fires. Lives in
 # .git/ because that is untracked, persistent and root-writable.

@@ -3,10 +3,7 @@
    JSON file. Still zero npm dependencies — nothing here needs `npm install`.
 
    Usage: node serve.js [port]
-   Env:   PORT, HOST, SUND_DATA (state file), SUND_TOKEN (optional access code)
-          The SUBBAN_* names are still honoured, so a container still running the
-          pre-rename unit keeps finding its state file instead of silently
-          starting empty. Remove once the unit has been migrated. */
+   Env:   PORT, HOST, SUND_DATA (state file), SUND_TOKEN (optional access code) */
 
 import http from 'node:http';
 import fs from 'node:fs/promises';
@@ -20,14 +17,14 @@ import { emptyRates, refreshThrough } from './lib/rates.js';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.argv[2] || process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
-const DATA = process.env.SUND_DATA || process.env.SUBBAN_DATA || path.join(ROOT, 'data', 'state.json');
+const DATA = process.env.SUND_DATA || path.join(ROOT, 'data', 'state.json');
 /* Touched after every change so sund-publish.path can republish the public
    snapshot immediately, instead of a timer polling for something that happens
    a few times a week. It is a separate file because DATA is replaced by
    rename(), which swaps the inode out from under an inotify watch; a plain
    write gives systemd the close-write it actually watches for. */
 const TRIGGER = path.join(path.dirname(DATA), 'publish-trigger');
-const TOKEN = process.env.SUND_TOKEN || process.env.SUBBAN_TOKEN || '';
+const TOKEN = process.env.SUND_TOKEN || '';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',

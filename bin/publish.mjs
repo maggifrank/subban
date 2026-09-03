@@ -25,7 +25,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DIST = process.env.SUND_DIST || process.env.SUBBAN_DIST || path.join(ROOT, 'dist');
+const DIST = process.env.SUND_DIST || path.join(ROOT, 'dist');
 const API = 'https://api.netlify.com/api/v1';
 
 const flag = (name) => process.argv.includes(name);
@@ -37,7 +37,7 @@ const arg = (name, fallback) => {
 const SOURCE = arg('--source', process.env.SUND_SOURCE || 'http://localhost:8080').replace(/\/$/, '');
 const DEPLOY = flag('--deploy');
 const IF_CHANGED = arg('--if-changed', null);
-const SOURCE_TOKEN = process.env.SUND_TOKEN || process.env.SUBBAN_TOKEN || '';
+const SOURCE_TOKEN = process.env.SUND_TOKEN || '';
 
 /* ---------- read the live instance ---------- */
 
@@ -163,7 +163,6 @@ async function authToken() {
 
 async function siteId() {
   if (process.env.SUND_NETLIFY_SITE) return process.env.SUND_NETLIFY_SITE;
-  if (process.env.SUBBAN_NETLIFY_SITE) return process.env.SUBBAN_NETLIFY_SITE;
   const raw = await fs.readFile(path.join(ROOT, '.netlify', 'state.json'), 'utf8');
   return JSON.parse(raw).siteId;
 }
