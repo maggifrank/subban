@@ -10,7 +10,7 @@ import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/cha
 
 const LANG_KEY = 'sund.lang';
 
-let snapshot = { trips: [], settings: null, generatedAt: null };
+let snapshot = { trips: [], settings: null, generatedAt: null, totals: null };
 let rates = null;
 let lang = detectLang();
 
@@ -21,7 +21,7 @@ const ui = {
   progressFill: el('progress-fill'), breakevenLine: el('breakeven-line'), breakevenNote: el('breakeven-note'),
   cardPerTrip: el('card-per-trip'), cardPerTripSub: el('card-per-trip-sub'),
   delta: el('delta'), deltaSub: el('delta-sub'),
-  langSelect: el('lang-select'), chart: el('chart'), rateNote: el('rate-note'),
+  langSelect: el('lang-select'), chart: el('chart'), rateNote: el('rate-note'), offCard: el('off-card'),
   historyToggle: el('history-toggle'), historyBody: el('history-body'), historySummary: el('history-summary')
 };
 
@@ -147,6 +147,20 @@ function render() {
     : '';
 
   ui.trips.textContent = n;
+
+  /* The big number is card swims only — the same split the app makes. Totals are
+     published as counts, so an older snapshot without them simply hides this. */
+  const totals = snapshot.totals;
+  if (!totals || !totals.all) {
+    ui.offCard.hidden = true;
+    ui.offCard.textContent = '';
+  } else {
+    ui.offCard.hidden = false;
+    const total = t(lang, 'counter.total', { trips: plural(lang, totals.all, 'trip') });
+    ui.offCard.textContent = totals.offCard
+      ? `${total} · ${t(lang, 'counter.offCard', { trips: plural(lang, totals.offCard, 'trip') })}`
+      : total;
+  }
   ui.lastSwim.textContent = n
     ? t(lang, 'counter.lastSwim', { date: formatDate(lang, tripAt(trips[n - 1]), 'full') })
     : t(lang, 'counter.none');
@@ -224,6 +238,10 @@ const [state, rateData] = await Promise.all([loadJSON('./state.json'), loadJSON(
 rates = rateData;
 if (state) {
   const clean = normalize(state);
-  snapshot = { trips: clean.trips, settings: clean.settings, generatedAt: state.generatedAt ?? null };
+  snapshot = {
+    trips: clean.trips, settings: clean.settings,
+    generatedAt: state.generatedAt ?? null,
+    totals: state.totals ?? null
+  };
 }
 render();

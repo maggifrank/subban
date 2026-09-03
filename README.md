@@ -145,6 +145,11 @@ were in, so `bin/publish.mjs` drops the pool from every trip and publishes an
 empty pool list, the same way it drops the time. Nothing is hidden in the page
 that isn't also absent from `state.json`.
 
+The public page shows the total number of swims and how many of those were off
+the card, but as **two plain counts** — no dates, no pools. It says that swimming
+happened elsewhere, not where or when. An older snapshot without those counts
+simply hides the line.
+
 The public snapshot also contains **only the trips that count toward the card**.
 That page is about what the membership costs per swim, so publishing the for-fun
 ones would make its arithmetic disagree with the app — and stripping the pool
