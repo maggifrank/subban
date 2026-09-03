@@ -114,13 +114,18 @@ making the count wait on a GPS fix, and a line under the counter says what it
 thinks — *You're at Laugardalslaug*, *No known pool nearby*, or *Location
 unavailable* — so it is never guessing behind your back.
 
-`lib/pools.js` carries coordinates for the Reykjavík-area pools, taken from
-OpenStreetMap. That list is **not exhaustive** — OSM tags these inconsistently
-(Laugardalslaug is a `shelter`, Sundhöll Reykjavíkur a `sauna`) and some, like
-Árbæjarlaug, are missing entirely. So anywhere unknown, the app asks for a name
-once, remembers the coordinates, and recognises it from then on. Nothing is
-matched further than 250 m, which absorbs the fact that an OSM point sits
-somewhere inside a complex rather than at its door.
+`lib/pools.js` carries all 100 pools listed at
+[sundlaugar.is](https://sundlaugar.is/sundlaugar/). That directory has names but
+**no coordinates at all**, so positions were looked up in OpenStreetMap by name.
+54 matched and can be detected by location; the other 46 carry a name only —
+they cannot be auto-detected, but they appear in the History picker, so a swim
+can still be attributed to them by hand.
+
+OSM tags these inconsistently (Laugardalslaug is a `shelter`, Sundhöll
+Reykjavíkur a `sauna`), so the matching is by name, and a point sits somewhere
+inside a complex rather than at its door. Nothing is matched further than 250 m,
+which absorbs that. Anywhere still unknown, the app asks for a name once,
+remembers the coordinates, and recognises it from then on.
 
 A table at the bottom counts visits per pool, most-visited first, with anything
 logged without a pool last, and totals them. The counter card states the total
