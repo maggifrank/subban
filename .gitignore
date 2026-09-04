@@ -7,3 +7,4 @@ data/
 # Local Netlify folder
 .netlify
 dist/
+.claude/worktrees/
