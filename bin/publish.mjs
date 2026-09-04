@@ -17,7 +17,7 @@
  *   SUND_TOKEN         access code, if the source instance requires one
  */
 
-import { normalize, cardTrips, poolCounts } from '../lib/state.js';
+import { normalize, cardTrips, tripSplit, poolCounts } from '../lib/state.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -79,7 +79,9 @@ function publicTrips(state) {
  * swimming happened without dating any of it.
  *
  * Counted over the full state, so the table covers the off-card swims the
- * published trips leave out and its total agrees with `totals.all`. */
+ * published trips leave out and its total agrees with `totals.all`. The `card`
+ * flag on each row comes from poolCounts(), so it follows whichever pools the
+ * card is set to cover rather than the built-in list. */
 function poolTable(state) {
   return poolCounts(normalize(state)).map(({ name, count, card }) => ({ name, count, card }));
 }
@@ -144,14 +146,24 @@ async function build(state, rates) {
   await fs.rm(DIST, { recursive: true, force: true });
   await fs.mkdir(path.join(DIST, 'lib'), { recursive: true });
   for (const [from, to] of COPY) await fs.copyFile(path.join(ROOT, from), path.join(DIST, to));
-  /* Two plain counts, so the public page can say how much swimming there was
-     without publishing the off-card trips themselves. No dates, no pools —
-     it reveals that swims happened elsewhere, not where or when. */
+  /* Plain counts, so the public page can say how much swimming there was
+     without publishing the trips the card does not cover — split by which of
+     the two rules left each one out, and dated by none of it. */
   const full = normalize(state);
-  const totals = { all: full.trips.length, offCard: full.trips.length - cardTrips(full).length };
+  const { total, offCard, outsideSeason } = tripSplit(full);
+  const totals = { all: total, offCard, outsideSeason };
+
+  /* `cardPools` is dropped even though poolTable() publishes a name and a card
+     flag for every pool in the history, which is most of what the id list would
+     say. Most, not all: the table only covers pools actually swum at, while the
+     selection can name pools never visited, and publishing it would say which
+     of those the card covers — a fact about the card that no figure on the page
+     is derived from. The page needs none of it: its trips arrive filtered, its
+     counts and its table are both totalled here. */
+  const settings = { ...full.settings, cardPools: null };
 
   await fs.writeFile(path.join(DIST, 'state.json'), JSON.stringify({
-    ...state, trips: publicTrips(state), pools: [], totals,
+    ...state, trips: publicTrips(state), pools: [], settings, totals,
     poolTable: poolTable(state), generatedAt: new Date().toISOString()
   }, null, 2));
   await fs.writeFile(path.join(DIST, 'rates.json'), JSON.stringify(rates, null, 2));

@@ -4,8 +4,8 @@
 
 import {
   emptyState, normalize, addTrip, removeLastTrip, removeTripAt, clearTrips, updateSettings,
-  costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, poolCounts, tripAt, cardTrips,
-  setTripPool, poolIsOnCard
+  costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, poolCounts, tripAt, tripSplit,
+  setTripPool, poolIsOnCard, tripInSeason, dateKey, dateFromKey, cardPoolIds
 } from './lib/state.js';
 import {
   LANGS, LANG_NAMES, DEFAULT_LANG, detectLang, t, plural, ordinal, formatDate, formatTime
@@ -177,12 +177,17 @@ const ui = {
   delta: el('delta'), deltaSub: el('delta-sub'),
   sync: el('sync'), syncText: el('sync-text'), langSelect: el('lang-select'),
   rateNote: el('rate-note'), here: el('here'), poolTable: el('pool-table'), offCard: el('off-card'),
+  season: el('season'),
   chart: el('chart'),
   historyToggle: el('history-toggle'), historyPanel: el('history-panel'), historyBody: el('history-body'),
   historySummary: el('history-summary'),
   backdate: el('backdate'), backdateDate: el('backdate-date'), backdateError: el('backdate-error'),
   settings: el('settings'), settingsToggle: el('settings-toggle'),
   inMembership: el('in-membership'), inCardPrice: el('in-card-price'), inCardTrips: el('in-card-trips'),
+  inSeasonStart: el('in-season-start'), inSeasonEnd: el('in-season-end'),
+  seasonWarning: el('season-warning'),
+  cardPoolList: el('card-pool-list'), cardPoolsCount: el('card-pools-count'),
+  poolFilter: el('pool-filter'), poolNoMatch: el('pool-no-match'),
   exportBtn: el('export'), resetBtn: el('reset')
 };
 
@@ -200,6 +205,9 @@ function applyStaticStrings() {
   }
   for (const node of document.querySelectorAll('[data-i18n-title]')) {
     node.setAttribute('title', t(lang, node.dataset.i18nTitle));
+  }
+  for (const node of document.querySelectorAll('[data-i18n-placeholder]')) {
+    node.setAttribute('placeholder', t(lang, node.dataset.i18nPlaceholder));
   }
 }
 
@@ -316,6 +324,70 @@ function renderPools(state) {
   renderPoolTable(ui.poolTable, lang, poolCounts(state));
 }
 
+/* ---------- which pools the card covers ---------- */
+
+/* Every pool the app knows about, each with a checkbox. The rows are built once
+   per language and pool list and then left alone: rebuilding them on each
+   render would throw away the search text and the scroll position every time a
+   box was ticked, because ticking one is a state change like any other. */
+let poolPickerSig = null;
+
+function renderCardPools(state) {
+  const pools = allPools(state.pools).sort((a, b) => a.name.localeCompare(b.name));
+  const visits = new Map();
+  for (const trip of state.trips) {
+    if (trip.pool) visits.set(trip.pool, (visits.get(trip.pool) ?? 0) + 1);
+  }
+
+  const sig = lang + '|' + pools.map((p) => `${p.id}~${visits.get(p.id) ?? 0}`).join('|');
+  if (sig !== poolPickerSig) {
+    poolPickerSig = sig;
+    const frag = document.createDocumentFragment();
+    for (const pool of pools) {
+      const row = document.createElement('label');
+      row.className = 'pool-pick';
+      row.innerHTML = '<input type="checkbox"><span class="pool-pick-name"></span>' +
+                      '<span class="pool-pick-visits"></span>';
+      const box = row.querySelector('input');
+      box.value = pool.id;
+      row.querySelector('.pool-pick-name').textContent = pool.name;
+      /* How often you have actually swum there, so the pools that matter are
+         recognisable in a list of a hundred. */
+      const n = visits.get(pool.id) ?? 0;
+      row.querySelector('.pool-pick-visits').textContent = n ? plural(lang, n, 'trip') : '';
+      row.dataset.name = pool.name.toLowerCase();
+      frag.append(row);
+    }
+    ui.cardPoolList.replaceChildren(frag);
+  }
+
+  /* Ticks come from the same rule the money uses, so with nothing saved yet the
+     boxes already show the card as it shipped. */
+  const chosen = new Set(cardPoolIds(state));
+  for (const box of ui.cardPoolList.querySelectorAll('input')) {
+    box.checked = chosen.has(box.value);
+  }
+  /* A bare fraction on screen: "3 / 107" needs no plural and no adjective, so it
+     is right in every language. The words are given to a screen reader, where
+     the number sits after a colon and nothing has to agree with it either. */
+  ui.cardPoolsCount.textContent = `${chosen.size} / ${pools.length}`;
+  ui.cardPoolsCount.setAttribute('aria-label',
+    t(lang, 'settings.cardPoolsCount', { n: chosen.size, total: pools.length }));
+  applyPoolFilter();
+}
+
+function applyPoolFilter() {
+  const needle = ui.poolFilter.value.trim().toLowerCase();
+  let shown = 0;
+  for (const row of ui.cardPoolList.children) {
+    const hit = !needle || row.dataset.name.includes(needle);
+    row.hidden = !hit;
+    if (hit) shown++;
+  }
+  ui.poolNoMatch.hidden = shown > 0;
+  ui.poolNoMatch.textContent = shown > 0 ? '' : t(lang, 'settings.poolNoMatch');
+}
+
 /* ---------- chart: trips per month ---------- */
 
 let chartSig = null;
@@ -342,7 +414,11 @@ function renderHistory(trips, state) {
       })
     : t(lang, 'history.none');
 
-  const sig = lang + '|' + trips.map((x) => `${tripAt(x)}~${x.pool ?? ''}`).join('|');
+  /* The season is part of the signature: moving the card's dates changes which
+     rows are tagged without changing a single trip. */
+  const { seasonStart, seasonEnd } = state.settings;
+  const sig = `${lang}|${seasonStart}|${seasonEnd}|` +
+              trips.map((x) => `${tripAt(x)}~${x.pool ?? ''}`).join('|');
   if (ui.historyPanel.hidden || sig === historySig) return;
   historySig = sig;
 
@@ -372,12 +448,20 @@ function renderHistory(trips, state) {
     const row = document.createElement('div');
     row.className = 'trip-row';
     row.innerHTML = `<span class="n"></span>` +
-                    `<span class="when"><span class="line"><span class="date"></span><span class="time"></span></span>` +
+                    `<span class="when"><span class="line"><span class="date"></span><span class="time"></span>` +
+                    `<span class="row-tag" hidden></span></span>` +
                     `<button class="row-pool" type="button"></button></span>` +
                     `<button class="row-del" type="button">×</button>`;
     row.querySelector('.n').textContent = `#${i + 1}`;
     row.querySelector('.date').textContent = formatDate(lang, d, 'day');
     row.querySelector('.time').textContent = isBackdated(d) ? '' : formatTime(d);
+
+    /* Tagged rather than hidden or greyed out: the swim happened, it is just
+       not this card's. The tag says which of the two reasons it is. */
+    const inSeason = tripInSeason(trip, state.settings);
+    const tag = row.querySelector('.row-tag');
+    tag.hidden = inSeason;
+    tag.textContent = inSeason ? '' : t(lang, 'season.tag');
 
     const poolBtn = row.querySelector('.row-pool');
     const poolName = trip.pool
@@ -385,7 +469,8 @@ function renderHistory(trips, state) {
       : null;
     poolBtn.textContent = poolName ?? t(lang, 'pool.setOn');
     poolBtn.classList.toggle('is-unset', !poolName);
-    poolBtn.classList.toggle('is-off-card', Boolean(trip.pool) && !poolIsOnCard(trip.pool, state.pools));
+    poolBtn.classList.toggle('is-off-card',
+      inSeason && Boolean(trip.pool) && !poolIsOnCard(trip.pool, state.pools, state.settings));
     poolBtn.dataset.at = iso;
     const del = row.querySelector('.row-del');
     del.dataset.at = iso;
@@ -412,29 +497,40 @@ function reverseKeepingMonths(nodes) {
 function render() {
   const state = view();
   const s = state.settings;
-  /* Only the three pools the card covers pay it off. Everything else is logged
-     for the record — it shows in the chart, the history and the pool table, but
-     never in the money. */
-  const counting = cardTrips(state);
-  const n = counting.length;
-  const offCard = state.trips.length - n;
+  /* Only swims inside the card's dates, at one of the three pools it covers,
+     pay it off. Everything else is logged for the record — it shows in the
+     chart, the history and the pool table, but never in the money. */
+  const split = tripSplit(state);
+  const n = split.counted;
   const be = breakEvenTrips(s);
   const cashBe = cashBreakEvenTrips(s);
   const perCardTrip = cardPerTrip(s);
   const cards = Math.ceil(s.membership / s.cardPrice);
 
   ui.trips.textContent = n;
-  ui.minus.disabled = n === 0;
+  /* − removes the most recent trip whatever it is, so it follows the total and
+     not the counted number: a mis-tap made outside the card's dates must still
+     be undoable. */
+  ui.minus.disabled = split.total === 0;
   ui.lastSwim.textContent = state.trips.length
     ? t(lang, 'counter.lastSwim', { date: formatDate(lang, tripAt(state.trips[state.trips.length - 1]), 'full') })
     : t(lang, 'counter.none');
   /* The big number is card swims only, so state the total outright rather than
-     leaving it to be inferred from the difference. */
-  const total = state.trips.length;
-  ui.offCard.hidden = total === 0;
-  ui.offCard.textContent = offCard
-    ? `${t(lang, 'counter.total', { trips: plural(lang, total, 'trip') })} · ${t(lang, 'counter.offCard', { trips: plural(lang, offCard, 'trip') })}`
-    : t(lang, 'counter.total', { trips: plural(lang, total, 'trip') });
+     leaving it to be inferred from the difference — and say which of the two
+     reasons kept each of the rest out, rather than lumping them together. */
+  const parts = [t(lang, 'counter.total', { trips: plural(lang, split.total, 'trip') })];
+  if (split.outsideSeason) {
+    parts.push(t(lang, 'counter.outsideSeason', { trips: plural(lang, split.outsideSeason, 'trip') }));
+  }
+  if (split.offCard) {
+    parts.push(t(lang, 'counter.offCard', { trips: plural(lang, split.offCard, 'trip') }));
+  }
+  ui.offCard.hidden = split.total === 0;
+  ui.offCard.textContent = parts.join(' · ');
+
+  const season = seasonLine(s);
+  ui.season.hidden = season === null;
+  ui.season.textContent = season ?? '';
 
   const cpt = costPerTrip(s, n);
   ui.costPerTrip.textContent = cpt === null ? '—' : money(lang, cpt, rates);
@@ -479,8 +575,31 @@ function render() {
   if (document.activeElement !== ui.inMembership) ui.inMembership.value = s.membership;
   if (document.activeElement !== ui.inCardPrice) ui.inCardPrice.value = s.cardPrice;
   if (document.activeElement !== ui.inCardTrips) ui.inCardTrips.value = s.cardTrips;
+  if (document.activeElement !== ui.inSeasonStart) ui.inSeasonStart.value = s.seasonStart ?? '';
+  if (document.activeElement !== ui.inSeasonEnd) ui.inSeasonEnd.value = s.seasonEnd ?? '';
+  /* Neither field constrains the other. They used to, via min/max, and it made
+     renewing the card impossible: the new year starts the day after the old one
+     ends, so every valid new start date was outside the old max and the picker
+     greyed it out — the field simply snapped back and nothing was saved. An
+     inverted range is now accepted and explained instead of being refused. */
+  ui.seasonWarning.hidden = !(s.seasonStart && s.seasonEnd && s.seasonStart > s.seasonEnd);
+  ui.seasonWarning.textContent = ui.seasonWarning.hidden ? '' : t(lang, 'settings.seasonInverted');
+
+  renderCardPools(state);
 
   setStatus(status);
+}
+
+/* Either bound alone is a complete statement — a card with only a start date
+   counts everything from that day on — so each combination gets its own
+   sentence rather than an em-dash with a blank on one side. */
+function seasonLine(s) {
+  const from = s.seasonStart ? formatDate(lang, dateFromKey(s.seasonStart), 'full') : null;
+  const to = s.seasonEnd ? formatDate(lang, dateFromKey(s.seasonEnd), 'full') : null;
+  if (from && to) return t(lang, 'season.range', { from, to });
+  if (from) return t(lang, 'season.from', { from });
+  if (to) return t(lang, 'season.until', { to });
+  return null;
 }
 
 /* ---------- actions ---------- */
@@ -530,12 +649,7 @@ ui.historyToggle.addEventListener('click', () => {
   if (open) { historySig = null; render(); }
 });
 
-function todayISODate() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-ui.backdateDate.max = todayISODate();
+ui.backdateDate.max = dateKey(new Date());
 
 ui.backdate.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -582,7 +696,9 @@ function openPoolPicker(button) {
   for (const pool of allPools(view().pools).sort((a, b) => a.name.localeCompare(b.name))) {
     const opt = document.createElement('option');
     opt.value = pool.id;
-    opt.textContent = pool.card ? pool.name : `${pool.name} · ${t(lang, 'pool.forFun')}`;
+    opt.textContent = poolIsOnCard(pool.id, view().pools, view().settings)
+      ? pool.name
+      : `${pool.name} · ${t(lang, 'pool.forFun')}`;
     select.append(opt);
   }
   select.value = current;
@@ -619,6 +735,31 @@ for (const [input, key, min] of [
     enqueue({ kind: 'settings', patch: { [key]: v } });
   });
 }
+
+/* The dates on the card. Blank clears that bound, and whatever is entered is
+   stored — including a range that ends before it starts, which render() says
+   plainly rather than silently undoing. Refusing the edit was worse: it left
+   no way to move the card forward a year, and gave no reason for the field
+   springing back. */
+for (const [input, key] of [[ui.inSeasonStart, 'seasonStart'], [ui.inSeasonEnd, 'seasonEnd']]) {
+  input.addEventListener('change', () => {
+    enqueue({ kind: 'settings', patch: { [key]: input.value || null } });
+  });
+}
+
+/* Ticking a pool starts from whatever the card covers now, so the first tick on
+   a state that has never been edited turns the built-in list into an explicit
+   one rather than replacing it with a single pool. */
+ui.cardPoolList.addEventListener('change', (e) => {
+  const box = e.target.closest('input[type="checkbox"]');
+  if (!box) return;
+  const chosen = new Set(cardPoolIds(view()));
+  if (box.checked) chosen.add(box.value);
+  else chosen.delete(box.value);
+  enqueue({ kind: 'settings', patch: { cardPools: [...chosen] } });
+});
+
+ui.poolFilter.addEventListener('input', applyPoolFilter);
 
 ui.resetBtn.addEventListener('click', () => {
   const n = view().trips.length;

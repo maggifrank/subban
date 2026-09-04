@@ -33,6 +33,7 @@
     </div>
     <div id="last-swim" class="sub"></div>
     <div id="off-card" class="sub" hidden></div>
+    <div id="season" class="sub" hidden></div>
     <div id="here" class="here" hidden></div>
   </section>
 
@@ -98,6 +99,27 @@
     <label><span data-i18n="settings.membership"></span>
       <input id="in-membership" type="number" min="0" step="100" inputmode="numeric">
     </label>
+    <div class="settings-pair">
+      <label><span data-i18n="settings.seasonStart"></span>
+        <input id="in-season-start" type="date">
+      </label>
+      <label><span data-i18n="settings.seasonEnd"></span>
+        <input id="in-season-end" type="date">
+      </label>
+    </div>
+    <p id="season-warning" class="settings-warning" hidden></p>
+
+    <div class="settings-pools">
+      <div class="settings-pools-head">
+        <span data-i18n="settings.cardPools"></span>
+        <span id="card-pools-count" class="settings-pools-count"></span>
+      </div>
+      <input id="pool-filter" type="search" autocomplete="off"
+             data-i18n-placeholder="settings.poolFilter"
+             data-i18n-aria="settings.poolFilter">
+      <div id="card-pool-list" class="pool-picker"></div>
+      <p id="pool-no-match" class="settings-warning" hidden></p>
+    </div>
     <label><span data-i18n="settings.cardPrice"></span>
       <input id="in-card-price" type="number" min="0" step="100" inputmode="numeric">
     </label>
