@@ -401,8 +401,12 @@ function renderChart(trips) {
 
 /* ---------- history ---------- */
 
+/* Backdated trips are anchored at local midday, so an exact midday reading
+   means "no time was recorded" and the row shows the date alone. Milliseconds
+   are ignored: a second trip backdated to the same day is nudged a millisecond
+   along to keep its timestamp unique, and it is still a backdated trip. */
 const isBackdated = (d) =>
-  d.getHours() === 12 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0;
+  d.getHours() === 12 && d.getMinutes() === 0 && d.getSeconds() === 0;
 
 let historySig = null;
 
