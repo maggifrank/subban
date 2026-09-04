@@ -114,12 +114,13 @@ making the count wait on a GPS fix, and a line under the counter says what it
 thinks — *You're at Laugardalslaug*, *No known pool nearby*, or *Location
 unavailable* — so it is never guessing behind your back.
 
-`lib/pools.js` carries all 108 pools listed at
-[sundlaugar.is](https://sundlaugar.is/sundlaugar/). That directory has names but
-**no coordinates at all**, so positions were looked up in OpenStreetMap by name.
-62 matched and can be detected by location; the other 46 carry a name only —
-they cannot be auto-detected, but they appear in the History picker, so a swim
-can still be attributed to them by hand.
+`lib/pools.js` carries all 131 pools listed at
+[sundlaugar.is](https://sundlaugar.is/sundlaugar/) — both its pool directory and
+the [natural pools](https://sundlaugar.is/heitar_laugar/) it keeps in a separate
+section. Neither has **any coordinates at all**, so positions were looked up in
+OpenStreetMap by name. 81 matched and can be detected by location; the other 50
+carry a name only — they cannot be auto-detected, but they appear in the History
+picker, so a swim can still be attributed to them by hand.
 
 OSM tags these inconsistently (Laugardalslaug is a `shelter`, Sundhöll
 Reykjavíkur a `sauna`), so the matching is by name, and a point sits somewhere
