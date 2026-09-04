@@ -358,6 +358,10 @@ your count, and is a shared code rather than real per-user accounts.
   safety-net timer, and the page always names the rate's date.
 - **A pool can only be set from the History list.** There is no bulk edit, so
   attributing a long backlog is one tap per trip.
+- **Bulk import is a script, not a button.** `bin/import-trips.mjs` reads a
+  written log — lines of `DD.MM  Pool name` — and posts each swim. It is
+  idempotent, refuses the whole run if any pool name is unrecognised, and
+  accepts ASCII spellings of Icelandic names. There is no equivalent in the app.
 - **Export has no matching import.** Settings offers *Export data*, which writes
   the current state as JSON, but there is no way to load one back through the
   app. Restoring means writing the file to `/var/lib/sund/state.json` and
