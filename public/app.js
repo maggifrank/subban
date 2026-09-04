@@ -9,10 +9,11 @@ import {
 import { LANGS, LANG_NAMES, detectLang, t, plural, ordinal, formatDate } from './lib/i18n.js';
 import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/chart.js';
+import { renderPoolTable } from './lib/pooltable.js';
 
 const LANG_KEY = 'sund.lang';
 
-let snapshot = { trips: [], settings: null, generatedAt: null, totals: null };
+let snapshot = { trips: [], settings: null, generatedAt: null, totals: null, poolTable: null };
 let rates = null;
 let lang = detectLang();
 
@@ -25,6 +26,7 @@ const ui = {
   delta: el('delta'), deltaSub: el('delta-sub'),
   langSelect: el('lang-select'), chart: el('chart'), rateNote: el('rate-note'), offCard: el('off-card'),
   season: el('season'),
+  pools: el('pools'), poolTable: el('pool-table'),
   historyToggle: el('history-toggle'), historyBody: el('history-body'), historySummary: el('history-summary')
 };
 
@@ -49,6 +51,16 @@ function setLang(next) {
   chartSig = null;
   historySig = null;
   render();
+}
+
+/* ---------- pool table ---------- */
+
+/* Totalled at publish time — the page's own trips are card-only and carry no
+   pool, so it could not count these for itself. A snapshot published before
+   the table existed simply has no section. */
+function renderPools(rows) {
+  ui.pools.hidden = !rows?.length;
+  if (rows?.length) renderPoolTable(ui.poolTable, lang, rows);
 }
 
 /* ---------- chart & history ---------- */
@@ -225,6 +237,7 @@ function render() {
   ui.deltaSub.textContent = delta >= 0 ? t(lang, 'stat.saved') : t(lang, 'stat.owed');
 
   renderRateNote();
+  renderPools(snapshot.poolTable);
   renderChart(trips);
   renderHistory(trips);
 }
@@ -266,7 +279,8 @@ if (state) {
   snapshot = {
     trips: clean.trips, settings: clean.settings,
     generatedAt: state.generatedAt ?? null,
-    totals: state.totals ?? null
+    totals: state.totals ?? null,
+    poolTable: Array.isArray(state.poolTable) ? state.poolTable : null
   };
 }
 render();

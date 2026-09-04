@@ -17,7 +17,7 @@
  *   SUND_TOKEN         access code, if the source instance requires one
  */
 
-import { normalize, cardTrips, tripSplit } from '../lib/state.js';
+import { normalize, cardTrips, tripSplit, poolCounts } from '../lib/state.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,12 +52,13 @@ async function get(pathname) {
 
 /* Publish the date a swim happened — not the hour, and not the pool.
  *
- * The exact times are a fairly detailed picture of someone's week, and which
- * pool says which neighbourhood they were in. Neither is needed by anything on
- * the public page: the count, cost per trip, break-even and the monthly chart
- * all work off dates alone. Both are dropped from the snapshot rather than
- * hidden in the page, or they would still sit in state.json for anyone who
- * opened it directly.
+ * The exact times are a fairly detailed picture of someone's week, and pinning
+ * a pool to a date says which neighbourhood they were in on which day. Neither
+ * is needed by anything on the public page: the count, cost per trip,
+ * break-even and the monthly chart all work off dates alone, and the pool table
+ * is published as totals (see poolTable()) rather than per trip. Both are
+ * dropped from the snapshot rather than hidden in the page, or they would still
+ * sit in state.json for anyone who opened it directly.
  *
  * Anchoring at local midday keeps the date and the count while dropping the
  * time, and matches the convention backdated trips already use. */
@@ -66,6 +67,23 @@ function publicTrips(state) {
     const d = new Date(typeof trip === 'string' ? trip : trip.at);
     return { at: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0).toISOString() };
   }).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+}
+
+/* The pool table, totalled here rather than on the page.
+ *
+ * The page has no trips to count from — its trips are card-only and carry no
+ * pool — so the finished rows are what gets published: a name, a count and
+ * whether the card covers it. That is deliberately the whole of it. Sending the
+ * pool list instead would ship every pool's coordinates, and leaving the pool
+ * on each trip would say which pool on which day; a total says where the
+ * swimming happened without dating any of it.
+ *
+ * Counted over the full state, so the table covers the off-card swims the
+ * published trips leave out and its total agrees with `totals.all`. The `card`
+ * flag on each row comes from poolCounts(), so it follows whichever pools the
+ * card is set to cover rather than the built-in list. */
+function poolTable(state) {
+  return poolCounts(normalize(state)).map(({ name, count, card }) => ({ name, count, card }));
 }
 
 /* Only the files the read-only page needs. lib/api.js, lib/rates.js, serve.js
@@ -78,7 +96,8 @@ const COPY = [
   ['lib/i18n.js', 'lib/i18n.js'],
   ['lib/money.js', 'lib/money.js'],
   ['lib/chart.js', 'lib/chart.js'],
-  ['lib/pools.js', 'lib/pools.js']
+  ['lib/pools.js', 'lib/pools.js'],
+  ['lib/pooltable.js', 'lib/pooltable.js']
 ];
 
 /* The list above is maintained by hand, and a module that grows a new import is
@@ -128,21 +147,24 @@ async function build(state, rates) {
   await fs.mkdir(path.join(DIST, 'lib'), { recursive: true });
   for (const [from, to] of COPY) await fs.copyFile(path.join(ROOT, from), path.join(DIST, to));
   /* Plain counts, so the public page can say how much swimming there was
-     without publishing the trips the card does not cover. No dates, no pools —
-     it reveals that swims happened outside the card, not where or when. */
+     without publishing the trips the card does not cover — split by which of
+     the two rules left each one out, and dated by none of it. */
   const full = normalize(state);
   const { total, offCard, outsideSeason } = tripSplit(full);
   const totals = { all: total, offCard, outsideSeason };
 
-  /* `cardPools` is a list of pool ids, which is a list of neighbourhoods — the
-     same thing the pool is dropped from every trip to avoid saying. The public
-     page never needs it: its trips arrive already filtered and its counts are
-     computed here. So it is dropped from the settings the same way. */
+  /* `cardPools` is dropped even though poolTable() publishes a name and a card
+     flag for every pool in the history, which is most of what the id list would
+     say. Most, not all: the table only covers pools actually swum at, while the
+     selection can name pools never visited, and publishing it would say which
+     of those the card covers — a fact about the card that no figure on the page
+     is derived from. The page needs none of it: its trips arrive filtered, its
+     counts and its table are both totalled here. */
   const settings = { ...full.settings, cardPools: null };
 
   await fs.writeFile(path.join(DIST, 'state.json'), JSON.stringify({
     ...state, trips: publicTrips(state), pools: [], settings, totals,
-    generatedAt: new Date().toISOString()
+    poolTable: poolTable(state), generatedAt: new Date().toISOString()
   }, null, 2));
   await fs.writeFile(path.join(DIST, 'rates.json'), JSON.stringify(rates, null, 2));
   await fs.writeFile(path.join(DIST, 'netlify.toml'), NETLIFY_TOML);
