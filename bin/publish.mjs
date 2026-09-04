@@ -17,7 +17,7 @@
  *   SUND_TOKEN         access code, if the source instance requires one
  */
 
-import { normalize, cardTrips } from '../lib/state.js';
+import { normalize, cardTrips, tripSplit } from '../lib/state.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -127,11 +127,12 @@ async function build(state, rates) {
   await fs.rm(DIST, { recursive: true, force: true });
   await fs.mkdir(path.join(DIST, 'lib'), { recursive: true });
   for (const [from, to] of COPY) await fs.copyFile(path.join(ROOT, from), path.join(DIST, to));
-  /* Two plain counts, so the public page can say how much swimming there was
-     without publishing the off-card trips themselves. No dates, no pools —
-     it reveals that swims happened elsewhere, not where or when. */
+  /* Plain counts, so the public page can say how much swimming there was
+     without publishing the trips the card does not cover. No dates, no pools —
+     it reveals that swims happened outside the card, not where or when. */
   const full = normalize(state);
-  const totals = { all: full.trips.length, offCard: full.trips.length - cardTrips(full).length };
+  const { total, offCard, outsideSeason } = tripSplit(full);
+  const totals = { all: total, offCard, outsideSeason };
 
   await fs.writeFile(path.join(DIST, 'state.json'), JSON.stringify({
     ...state, trips: publicTrips(state), pools: [], totals, generatedAt: new Date().toISOString()

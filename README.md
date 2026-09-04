@@ -16,6 +16,7 @@ API behind it to write to. Same URL, two faces, decided by DNS.
 | | |
 |---|---|
 | Membership | 36.400 kr / year |
+| Valid | **23.08.26 – 23.08.27**, both days inclusive |
 | Alternative | 30-trip card at 14.000 kr → **467 kr per trip** |
 | Break-even | **78 trips** |
 
@@ -32,7 +33,9 @@ not by the trip. You'd buy the 3rd card on trip 61, and only at that point have
 handed over more cash (42.000 kr) than the membership cost. So **61** is when
 you're ahead on money spent, **78** is when you're ahead on value received.
 
-All three numbers are editable under ⚙, and the change syncs like everything else.
+All three numbers are editable under ⚙, along with the dates the card is valid
+between — see [The card's dates](#the-cards-dates) — and every change syncs like
+everything else.
 
 ## Languages
 
@@ -95,14 +98,56 @@ required lightness band against the dark card surface.
 
 The history panel below is the chart's table view — same data, every trip listed.
 
+## The card's dates
+
+A membership runs for a year, and the app used to have no idea when that year
+started. Every trip ever logged counted, so a previous season — swum on 30-trip
+cards at the very same three pools — was folded into the card's arithmetic and
+made the cost per trip look far better than it really was.
+
+Only swims between **valid from** and **valid until** pay the card off. Both
+ends are inclusive, and either may be left blank: a card with only a start date
+counts everything from that day on, and with neither set every trip counts,
+exactly as it did before this existed.
+
+The current card's dates live in `DEFAULT_SETTINGS` beside its prices, which are
+the same card's facts. That matters for the changeover: a state file written
+before this existed has no season fields at all, so `normalize()` fills them
+from the defaults and the dates apply to the history already on disk — no
+settings step, nothing to migrate. Both dates are still editable under ⚙, which
+is where next year's card gets entered.
+
+Nothing is deleted. The earlier trips stay in the history, the chart and the
+pool table as they were; they are tagged *outside the dates* in the history
+list, and the counter card says how many there are. **Rolling over to next
+year's membership is now a matter of moving the two dates**, not **Reset
+trips** — the record survives the renewal.
+
+The bounds are compared as **local calendar dates**, not as instants. They are
+the dates printed on the card, and every date the app shows — a history row, a
+chart column, the midday anchor a backdated trip is stored at — is already the
+local one.
+
+A date is validated by round trip rather than by `Date.parse`, which is not a
+validator: it takes `2026-02-30` happily and hands back the 2nd of March, so a
+typo would be stored as a real but wrong bound. An inverted range is refused by
+the settings panel rather than stored, because it would count nothing at all,
+which reads as a broken app rather than as a setting someone chose — and the
+two pickers fence each other, so the obvious way to enter one is not offered.
+
 ## Pools
 
 **The card only covers three pools** — Suðurbæjarlaug, Sundhöll Hafnarfjarðar
 and Ásvallalaug, all in Hafnarfjörður. Only swims at those pay it off, so only
 those feed the big counter, the cost per trip, break-even and the ahead/behind
 figure. Anywhere else is logged for the record and shows in the chart, the
-history and the pool table, but never in the money. The counter card says how
-many of those there are, and the pool table tags them.
+history and the pool table, but never in the money. Where is only half of it;
+the other half is when, which is [the card's dates](#the-cards-dates) above.
+
+The counter card says how many trips each of the two rules left out, as separate
+figures rather than one lump: a swim outside the dates is reported as such
+whatever pool it was at, so the three numbers always add up to the total. The
+pool table tags the pools, and the history tags the dates.
 
 A trip with no pool attached — anything logged before this existed, or with
 location switched off — still counts, which is what it did before. The app never
@@ -145,12 +190,13 @@ were in, so `bin/publish.mjs` drops the pool from every trip and publishes an
 empty pool list, the same way it drops the time. Nothing is hidden in the page
 that isn't also absent from `state.json`.
 
-The public page shows the total number of swims and how many of those were off
-the card, but as **two plain counts** — no dates, no pools. It says that swimming
-happened elsewhere, not where or when. An older snapshot without those counts
-simply hides the line.
+The public page shows the total number of swims and how many of those the card
+did not cover, split by which rule left them out, but as **plain counts** — no
+dates, no pools. It says that swimming happened outside the card, not where or
+when. An older snapshot without those counts simply hides the line.
 
-The public snapshot also contains **only the trips that count toward the card**.
+The public snapshot also contains **only the trips that count toward the card** —
+inside its dates, at one of its pools.
 That page is about what the membership costs per swim, so publishing the for-fun
 ones would make its arithmetic disagree with the app — and stripping the pool
 while keeping the trip would leave no way to tell them apart. Its monthly chart
@@ -217,7 +263,7 @@ touch a few times a week, polling is less to go wrong.
 | `DELETE /api/trips/one` | remove one trip by timestamp (`{ at }`) |
 | `DELETE /api/trips` | clear the season |
 | `GET /api/rates` | cached ECB rates for the display conversion |
-| `PUT /api/settings` | change the prices |
+| `PUT /api/settings` | change the prices, or the card's dates |
 
 `lib/state.js` (the domain logic) and `lib/api.js` (the routing) are shared by
 both backends *and* by the browser, so the two deployments can't drift apart and
@@ -365,8 +411,10 @@ your count, and is a shared code rather than real per-user accounts.
 - **Which pools count is fixed in code.** `card: true` in `lib/pools.js` marks
   the three the membership covers. There is no way to change that from the app,
   so a new card covering different pools means editing that file.
-- **No membership start date.** The app counts trips, not the year they belong
-  to. When the membership renews, use **Reset trips** to start the new season.
+- **One membership at a time.** The card has a single pair of dates, so the app
+  shows this year's card or last year's, not both. Older seasons stay in the
+  history and the chart, but their own cost per trip is gone once the dates
+  move on.
 
 ## Files
 

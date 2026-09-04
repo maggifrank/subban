@@ -3,7 +3,9 @@
    hiding buttons. All the arithmetic, wording and the chart come from the same
    lib/ modules the private app uses, so the two cannot disagree. */
 
-import { normalize, costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, tripAt } from './lib/state.js';
+import {
+  normalize, costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, tripAt, dateFromKey
+} from './lib/state.js';
 import { LANGS, LANG_NAMES, detectLang, t, plural, ordinal, formatDate } from './lib/i18n.js';
 import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/chart.js';
@@ -22,6 +24,7 @@ const ui = {
   cardPerTrip: el('card-per-trip'), cardPerTripSub: el('card-per-trip-sub'),
   delta: el('delta'), deltaSub: el('delta-sub'),
   langSelect: el('lang-select'), chart: el('chart'), rateNote: el('rate-note'), offCard: el('off-card'),
+  season: el('season'),
   historyToggle: el('history-toggle'), historyBody: el('history-body'), historySummary: el('history-summary')
 };
 
@@ -132,6 +135,17 @@ function renderRateNote() {
     : t(lang, 'rate.unavailable');
 }
 
+/* Either bound alone is a complete statement — the same three sentences the
+   private app uses. */
+function seasonLine(s) {
+  const from = s.seasonStart ? formatDate(lang, dateFromKey(s.seasonStart), 'full') : null;
+  const to = s.seasonEnd ? formatDate(lang, dateFromKey(s.seasonEnd), 'full') : null;
+  if (from && to) return t(lang, 'season.range', { from, to });
+  if (from) return t(lang, 'season.from', { from });
+  if (to) return t(lang, 'season.until', { to });
+  return null;
+}
+
 function render() {
   const s = snapshot.settings;
   if (!s) return;
@@ -156,11 +170,22 @@ function render() {
     ui.offCard.textContent = '';
   } else {
     ui.offCard.hidden = false;
-    const total = t(lang, 'counter.total', { trips: plural(lang, totals.all, 'trip') });
-    ui.offCard.textContent = totals.offCard
-      ? `${total} · ${t(lang, 'counter.offCard', { trips: plural(lang, totals.offCard, 'trip') })}`
-      : total;
+    const parts = [t(lang, 'counter.total', { trips: plural(lang, totals.all, 'trip') })];
+    if (totals.outsideSeason) {
+      parts.push(t(lang, 'counter.outsideSeason', { trips: plural(lang, totals.outsideSeason, 'trip') }));
+    }
+    if (totals.offCard) {
+      parts.push(t(lang, 'counter.offCard', { trips: plural(lang, totals.offCard, 'trip') }));
+    }
+    ui.offCard.textContent = parts.join(' · ');
   }
+
+  /* The dates bound every figure on this page, so they are stated rather than
+     left to be guessed from where the history starts. */
+  const season = seasonLine(s);
+  ui.season.hidden = season === null;
+  ui.season.textContent = season ?? '';
+
   ui.lastSwim.textContent = n
     ? t(lang, 'counter.lastSwim', { date: formatDate(lang, tripAt(trips[n - 1]), 'full') })
     : t(lang, 'counter.none');

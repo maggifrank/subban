@@ -207,6 +207,11 @@ h1 {
   color: var(--ink);
 }
 
+/* The two dates read as one setting, so they sit side by side — and stack on a
+   narrow phone rather than squeezing two date pickers into half a screen. */
+.settings-pair { display: flex; flex-wrap: wrap; gap: 12px; }
+.settings-pair > label { flex: 1 1 10rem; }
+
 .settings-actions { display: flex; gap: 10px; }
 
 .ghost-btn, .danger-btn {
@@ -328,7 +333,7 @@ h1 {
 
 .trip-row .n { color: var(--ink-dim); font-size: 13px; }
 .trip-row .when { font-size: 15px; }
-.trip-row .time { color: var(--ink-dim); font-size: 13px; margin-left: 6px; }
+.trip-row .time { color: var(--ink-dim); font-size: 13px; }
 
 .row-del {
   background: none;
@@ -510,7 +515,18 @@ h1 {
 .pool-row.is-off-card .pool-count { color: var(--ink-dim); font-weight: 500; }
 
 .trip-row .when { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.trip-row .when .line { display: flex; align-items: baseline; }
+.trip-row .when .line { display: flex; align-items: baseline; gap: 6px; }
+
+/* Same pill as the pool table's tag: the swim happened, it just is not this
+   card's, so the row is marked rather than dimmed or dropped. */
+.row-tag {
+  font-size: 11px;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
 
 .row-pool {
   align-self: start;
