@@ -13,6 +13,7 @@ import {
 import { money, isConverted, rateString, currencyFor } from './lib/money.js';
 import { chartHTML, chartSignature, bindChartTooltip, monthKey } from './lib/chart.js';
 import { matchPool, idFor, allPools } from './lib/pools.js';
+import { renderPoolTable } from './lib/pooltable.js';
 
 const CACHE_KEY = 'sund.cache.v2';
 const TOKEN_KEY = 'sund.token';
@@ -312,44 +313,7 @@ function renderHere() {
 /* ---------- pool table ---------- */
 
 function renderPools(state) {
-  const rows = poolCounts(state);
-  if (!rows.length) {
-    ui.poolTable.innerHTML = `<p class="pool-empty">${t(lang, 'pool.empty')}</p>`;
-    return;
-  }
-  const most = Math.max(...rows.map((r) => r.count));
-  const frag = document.createDocumentFragment();
-  for (const row of rows) {
-    const el = document.createElement('div');
-    el.className = 'pool-row';
-    el.innerHTML = '<span class="pool-name"></span>' +
-                   '<span class="pool-bar"><span></span></span>' +
-                   '<span class="pool-count"></span>';
-    const name = el.querySelector('.pool-name');
-    name.textContent = row.name ?? t(lang, 'pool.unattributed');
-    name.classList.toggle('is-muted', row.name === null);
-    el.classList.toggle('is-off-card', !row.card);
-    if (!row.card) {
-      const tag = document.createElement('span');
-      tag.className = 'pool-tag';
-      tag.textContent = t(lang, 'pool.forFun');
-      name.after(tag);
-      el.style.gridTemplateColumns = '1fr auto auto auto';
-    }
-    el.querySelector('.pool-bar > span').style.width = `${(row.count / most) * 100}%`;
-    el.querySelector('.pool-count').textContent = row.count;
-    frag.append(el);
-  }
-
-  const sum = rows.reduce((a, r) => a + r.count, 0);
-  const totalRow = document.createElement('div');
-  totalRow.className = 'pool-row pool-row--total';
-  totalRow.innerHTML = '<span class="pool-name"></span><span></span><span class="pool-count"></span>';
-  totalRow.querySelector('.pool-name').textContent = t(lang, 'pool.total');
-  totalRow.querySelector('.pool-count').textContent = sum;
-  frag.append(totalRow);
-
-  ui.poolTable.replaceChildren(frag);
+  renderPoolTable(ui.poolTable, lang, poolCounts(state));
 }
 
 /* ---------- chart: trips per month ---------- */

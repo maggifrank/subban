@@ -128,7 +128,8 @@ which absorbs that. Anywhere still unknown, the app asks for a name once,
 remembers the coordinates, and recognises it from then on.
 
 A table at the bottom counts visits per pool, most-visited first, with anything
-logged without a pool last, and totals them. The counter card states the total
+logged without a pool last, and totals them. It is on the public page too, drawn
+by the same `lib/pooltable.js` from the same rows. The counter card states the total
 too — the big number is card swims only, so the total is said outright rather
 than left to be worked out from the difference.
 
@@ -140,15 +141,25 @@ corrected. The money follows immediately: move a swim to a pool the card does
 not cover and the counter drops. Trips recorded before this existed, or with location
 switched off, simply have no pool — the count is unaffected.
 
-**Pools never reach the public site.** Which pool says which neighbourhood you
-were in, so `bin/publish.mjs` drops the pool from every trip and publishes an
-empty pool list, the same way it drops the time. Nothing is hidden in the page
-that isn't also absent from `state.json`.
+**The public site gets the table, but only as totals.** `bin/publish.mjs`
+publishes the finished rows — a name, a count and whether the card covers it —
+and still drops the pool from every trip, publishes an empty pool list, and
+drops the time, the same way it always did. So the page can say where the
+swimming happens without saying *when* any of it happened: there is no pool
+attached to a date anywhere in `state.json`, and no coordinates, because the
+pool list with the positions in it is not published at all.
+
+Totals rather than a count the page works out for itself, because it cannot:
+its own trips are card-only and carry no pool. The table is counted over the
+whole history, so it covers the off-card swims the published trips leave out and
+its total agrees with the counter card's. A snapshot published before the table
+existed has no `poolTable` key, and the section is simply absent.
+
+Nothing is hidden in the page that isn't also absent from `state.json`.
 
 The public page shows the total number of swims and how many of those were off
-the card, but as **two plain counts** — no dates, no pools. It says that swimming
-happened elsewhere, not where or when. An older snapshot without those counts
-simply hides the line.
+the card, but as **two plain counts** — no dates. An older snapshot without those
+counts simply hides the line.
 
 The public snapshot also contains **only the trips that count toward the card**.
 That page is about what the membership costs per swim, so publishing the for-fun
@@ -259,8 +270,8 @@ rollback if the new revision won't start. See [DEPLOY.md](DEPLOY.md).
 ## The public read-only site
 
 <https://sund.talva.is> from outside the LAN — a snapshot of the count, the
-cost per trip, break-even and the chart, with no way to change anything. Its
-direct Netlify address is <https://sund-swim.netlify.app>.
+cost per trip, break-even, the chart and the pool table, with no way to change
+anything. Its direct Netlify address is <https://sund-swim.netlify.app>.
 
 The same hostname serves the private app inside the LAN, through split-horizon
 DNS: internally it resolves to Caddy and on to the container, externally to
@@ -281,6 +292,11 @@ one day stay two rows) while dropping the hour. Nothing on the public page needs
 the time: the count, cost per trip, break-even and the monthly chart all work
 off dates alone. The private app is unaffected and still records and shows exact
 times.
+
+The **pool table** is stripped the same way, in the other direction: the counts
+are published, the trips they were counted from are not. A row says the pool and
+how many visits it has had, and nothing in the snapshot can put one of those
+visits on a day. See [Pools](#pools).
 
 The container republishes within seconds of a swim — see
 [DEPLOY.md](DEPLOY.md#publishing-the-public-read-only-site). To publish by hand
@@ -383,6 +399,7 @@ your count, and is a shared code rather than real per-user accounts.
 | `lib/i18n.js` | Icelandic, English and Polish strings, plurals, dates, number formats |
 | `lib/money.js` | currency per language, conversion and formatting |
 | `lib/chart.js` | the trips-per-month chart, shared by both pages |
+| `lib/pooltable.js` | the visits-per-pool table, shared by both pages |
 | `lib/rates.js` | ECB rate fetching and cache freshness |
 | `serve.js` | LXC backend — static files + API, file-backed, no dependencies |
 | `netlify/functions/trips.js` | unused Netlify backend — same API, Blobs-backed |
