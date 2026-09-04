@@ -114,10 +114,10 @@ making the count wait on a GPS fix, and a line under the counter says what it
 thinks — *You're at Laugardalslaug*, *No known pool nearby*, or *Location
 unavailable* — so it is never guessing behind your back.
 
-`lib/pools.js` carries all 100 pools listed at
+`lib/pools.js` carries all 108 pools listed at
 [sundlaugar.is](https://sundlaugar.is/sundlaugar/). That directory has names but
 **no coordinates at all**, so positions were looked up in OpenStreetMap by name.
-54 matched and can be detected by location; the other 46 carry a name only —
+62 matched and can be detected by location; the other 46 carry a name only —
 they cannot be auto-detected, but they appear in the History picker, so a swim
 can still be attributed to them by hand.
 
