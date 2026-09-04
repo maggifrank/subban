@@ -5,7 +5,7 @@
 import {
   emptyState, normalize, addTrip, removeLastTrip, removeTripAt, clearTrips, updateSettings,
   costPerTrip, cardPerTrip, breakEvenTrips, cashBreakEvenTrips, poolCounts, tripAt, tripSplit,
-  setTripPool, poolIsOnCard, tripInSeason, dateKey, dateFromKey
+  setTripPool, poolIsOnCard, tripInSeason, dateKey, dateFromKey, cardPoolIds
 } from './lib/state.js';
 import {
   LANGS, LANG_NAMES, DEFAULT_LANG, detectLang, t, plural, ordinal, formatDate, formatTime
@@ -184,6 +184,9 @@ const ui = {
   settings: el('settings'), settingsToggle: el('settings-toggle'),
   inMembership: el('in-membership'), inCardPrice: el('in-card-price'), inCardTrips: el('in-card-trips'),
   inSeasonStart: el('in-season-start'), inSeasonEnd: el('in-season-end'),
+  seasonWarning: el('season-warning'),
+  cardPoolList: el('card-pool-list'), cardPoolsCount: el('card-pools-count'),
+  poolFilter: el('pool-filter'), poolNoMatch: el('pool-no-match'),
   exportBtn: el('export'), resetBtn: el('reset')
 };
 
@@ -201,6 +204,9 @@ function applyStaticStrings() {
   }
   for (const node of document.querySelectorAll('[data-i18n-title]')) {
     node.setAttribute('title', t(lang, node.dataset.i18nTitle));
+  }
+  for (const node of document.querySelectorAll('[data-i18n-placeholder]')) {
+    node.setAttribute('placeholder', t(lang, node.dataset.i18nPlaceholder));
   }
 }
 
@@ -354,6 +360,70 @@ function renderPools(state) {
   ui.poolTable.replaceChildren(frag);
 }
 
+/* ---------- which pools the card covers ---------- */
+
+/* Every pool the app knows about, each with a checkbox. The rows are built once
+   per language and pool list and then left alone: rebuilding them on each
+   render would throw away the search text and the scroll position every time a
+   box was ticked, because ticking one is a state change like any other. */
+let poolPickerSig = null;
+
+function renderCardPools(state) {
+  const pools = allPools(state.pools).sort((a, b) => a.name.localeCompare(b.name));
+  const visits = new Map();
+  for (const trip of state.trips) {
+    if (trip.pool) visits.set(trip.pool, (visits.get(trip.pool) ?? 0) + 1);
+  }
+
+  const sig = lang + '|' + pools.map((p) => `${p.id}~${visits.get(p.id) ?? 0}`).join('|');
+  if (sig !== poolPickerSig) {
+    poolPickerSig = sig;
+    const frag = document.createDocumentFragment();
+    for (const pool of pools) {
+      const row = document.createElement('label');
+      row.className = 'pool-pick';
+      row.innerHTML = '<input type="checkbox"><span class="pool-pick-name"></span>' +
+                      '<span class="pool-pick-visits"></span>';
+      const box = row.querySelector('input');
+      box.value = pool.id;
+      row.querySelector('.pool-pick-name').textContent = pool.name;
+      /* How often you have actually swum there, so the pools that matter are
+         recognisable in a list of a hundred. */
+      const n = visits.get(pool.id) ?? 0;
+      row.querySelector('.pool-pick-visits').textContent = n ? plural(lang, n, 'trip') : '';
+      row.dataset.name = pool.name.toLowerCase();
+      frag.append(row);
+    }
+    ui.cardPoolList.replaceChildren(frag);
+  }
+
+  /* Ticks come from the same rule the money uses, so with nothing saved yet the
+     boxes already show the card as it shipped. */
+  const chosen = new Set(cardPoolIds(state));
+  for (const box of ui.cardPoolList.querySelectorAll('input')) {
+    box.checked = chosen.has(box.value);
+  }
+  /* A bare fraction on screen: "3 / 107" needs no plural and no adjective, so it
+     is right in every language. The words are given to a screen reader, where
+     the number sits after a colon and nothing has to agree with it either. */
+  ui.cardPoolsCount.textContent = `${chosen.size} / ${pools.length}`;
+  ui.cardPoolsCount.setAttribute('aria-label',
+    t(lang, 'settings.cardPoolsCount', { n: chosen.size, total: pools.length }));
+  applyPoolFilter();
+}
+
+function applyPoolFilter() {
+  const needle = ui.poolFilter.value.trim().toLowerCase();
+  let shown = 0;
+  for (const row of ui.cardPoolList.children) {
+    const hit = !needle || row.dataset.name.includes(needle);
+    row.hidden = !hit;
+    if (hit) shown++;
+  }
+  ui.poolNoMatch.hidden = shown > 0;
+  ui.poolNoMatch.textContent = shown > 0 ? '' : t(lang, 'settings.poolNoMatch');
+}
+
 /* ---------- chart: trips per month ---------- */
 
 let chartSig = null;
@@ -436,7 +506,7 @@ function renderHistory(trips, state) {
     poolBtn.textContent = poolName ?? t(lang, 'pool.setOn');
     poolBtn.classList.toggle('is-unset', !poolName);
     poolBtn.classList.toggle('is-off-card',
-      inSeason && Boolean(trip.pool) && !poolIsOnCard(trip.pool, state.pools));
+      inSeason && Boolean(trip.pool) && !poolIsOnCard(trip.pool, state.pools, state.settings));
     poolBtn.dataset.at = iso;
     const del = row.querySelector('.row-del');
     del.dataset.at = iso;
@@ -543,10 +613,15 @@ function render() {
   if (document.activeElement !== ui.inCardTrips) ui.inCardTrips.value = s.cardTrips;
   if (document.activeElement !== ui.inSeasonStart) ui.inSeasonStart.value = s.seasonStart ?? '';
   if (document.activeElement !== ui.inSeasonEnd) ui.inSeasonEnd.value = s.seasonEnd ?? '';
-  /* Each bound fences the other in the picker, so the obvious way to enter an
-     inverted range is simply not offered. */
-  ui.inSeasonStart.max = s.seasonEnd ?? '';
-  ui.inSeasonEnd.min = s.seasonStart ?? '';
+  /* Neither field constrains the other. They used to, via min/max, and it made
+     renewing the card impossible: the new year starts the day after the old one
+     ends, so every valid new start date was outside the old max and the picker
+     greyed it out — the field simply snapped back and nothing was saved. An
+     inverted range is now accepted and explained instead of being refused. */
+  ui.seasonWarning.hidden = !(s.seasonStart && s.seasonEnd && s.seasonStart > s.seasonEnd);
+  ui.seasonWarning.textContent = ui.seasonWarning.hidden ? '' : t(lang, 'settings.seasonInverted');
+
+  renderCardPools(state);
 
   setStatus(status);
 }
@@ -657,7 +732,9 @@ function openPoolPicker(button) {
   for (const pool of allPools(view().pools).sort((a, b) => a.name.localeCompare(b.name))) {
     const opt = document.createElement('option');
     opt.value = pool.id;
-    opt.textContent = pool.card ? pool.name : `${pool.name} · ${t(lang, 'pool.forFun')}`;
+    opt.textContent = poolIsOnCard(pool.id, view().pools, view().settings)
+      ? pool.name
+      : `${pool.name} · ${t(lang, 'pool.forFun')}`;
     select.append(opt);
   }
   select.value = current;
@@ -695,21 +772,30 @@ for (const [input, key, min] of [
   });
 }
 
-/* The dates on the card. Blank clears that bound. An inverted range is refused
-   rather than stored: it would count nothing at all, which reads as a broken
-   app rather than as a setting someone chose. */
+/* The dates on the card. Blank clears that bound, and whatever is entered is
+   stored — including a range that ends before it starts, which render() says
+   plainly rather than silently undoing. Refusing the edit was worse: it left
+   no way to move the card forward a year, and gave no reason for the field
+   springing back. */
 for (const [input, key] of [[ui.inSeasonStart, 'seasonStart'], [ui.inSeasonEnd, 'seasonEnd']]) {
   input.addEventListener('change', () => {
-    const s = view().settings;
-    const value = input.value || null;
-    const next = { ...s, [key]: value };
-    if (next.seasonStart && next.seasonEnd && next.seasonStart > next.seasonEnd) {
-      input.value = s[key] ?? '';        // put it back; render() would leave a focused field alone
-      return;
-    }
-    enqueue({ kind: 'settings', patch: { [key]: value } });
+    enqueue({ kind: 'settings', patch: { [key]: input.value || null } });
   });
 }
+
+/* Ticking a pool starts from whatever the card covers now, so the first tick on
+   a state that has never been edited turns the built-in list into an explicit
+   one rather than replacing it with a single pool. */
+ui.cardPoolList.addEventListener('change', (e) => {
+  const box = e.target.closest('input[type="checkbox"]');
+  if (!box) return;
+  const chosen = new Set(cardPoolIds(view()));
+  if (box.checked) chosen.add(box.value);
+  else chosen.delete(box.value);
+  enqueue({ kind: 'settings', patch: { cardPools: [...chosen] } });
+});
+
+ui.poolFilter.addEventListener('input', applyPoolFilter);
 
 ui.resetBtn.addEventListener('click', () => {
   const n = view().trips.length;

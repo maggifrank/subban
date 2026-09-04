@@ -33,9 +33,9 @@ not by the trip. You'd buy the 3rd card on trip 61, and only at that point have
 handed over more cash (42.000 kr) than the membership cost. So **61** is when
 you're ahead on money spent, **78** is when you're ahead on value received.
 
-All three numbers are editable under ⚙, along with the dates the card is valid
-between — see [The card's dates](#the-cards-dates) — and every change syncs like
-everything else.
+All three numbers are editable under ⚙, along with everything else that defines
+the card: [the dates it is valid between](#the-cards-dates) and
+[which pools it covers](#pools). Every change syncs like everything else.
 
 ## Languages
 
@@ -130,28 +130,67 @@ local one.
 
 A date is validated by round trip rather than by `Date.parse`, which is not a
 validator: it takes `2026-02-30` happily and hands back the 2nd of March, so a
-typo would be stored as a real but wrong bound. An inverted range is refused by
-the settings panel rather than stored, because it would count nothing at all,
-which reads as a broken app rather than as a setting someone chose — and the
-two pickers fence each other, so the obvious way to enter one is not offered.
+typo would be stored as a real but wrong bound.
+
+**Neither field constrains the other.** They did at first, through `min` and
+`max`, so that an end before its start could not be entered — and that quietly
+made renewal impossible. Next year's card starts the day after this one ends,
+so every valid new start date sat outside the old `max`: the native picker
+greyed those days out, a typed one failed validation, and the field simply
+sprang back to its old value with nothing saved and no reason given. The one
+edit the feature exists to support was the one it refused.
+
+So an inverted range is now stored like any other and **said out loud** — the
+settings panel shows *the end date is before the start date, so no trip counts*
+— rather than being silently undone. Set the start, then the end, and the
+warning clears on the second edit.
 
 ## Pools
 
-**The card only covers three pools** — Suðurbæjarlaug, Sundhöll Hafnarfjarðar
-and Ásvallalaug, all in Hafnarfjörður. Only swims at those pay it off, so only
-those feed the big counter, the cost per trip, break-even and the ahead/behind
-figure. Anywhere else is logged for the record and shows in the chart, the
+**The card covers three pools out of the box** — Suðurbæjarlaug, Sundhöll
+Hafnarfjarðar and Ásvallalaug, all in Hafnarfjörður — and **which pools it
+covers is a setting**, under ⚙, not something fixed in code. Only swims at the
+chosen pools pay the card off, so only those feed the big counter, the cost per
+trip, break-even and the ahead/behind figure. Anywhere else is logged for the record and shows in the chart, the
 history and the pool table, but never in the money. Where is only half of it;
 the other half is when, which is [the card's dates](#the-cards-dates) above.
 
 The counter card says how many trips each of the two rules left out, as separate
 figures rather than one lump: a swim outside the dates is reported as such
 whatever pool it was at, so the three numbers always add up to the total. The
-pool table tags the pools, and the history tags the dates.
+pool table tags the pools, and the history tags the dates. Both follow the
+settings, so unticking a pool retags its rows immediately.
 
 A trip with no pool attached — anything logged before this existed, or with
 location switched off — still counts, which is what it did before. The app never
 silently drops a swim because it could not work out where you were.
+
+### Choosing them
+
+⚙ lists every pool the app knows about, each with a checkbox and, for the ones
+you have been to, how often — which is what makes a hundred-odd rows navigable.
+A search box narrows the list, and the list is built once and then filtered by
+hiding rows, so ticking a box does not throw away what you typed or where you
+had scrolled.
+
+`settings.cardPools` holds the choice as a list of ids. It starts `null`,
+meaning *no choice saved, use the built-in list*, so the boxes already show the
+card as it shipped and nothing has to be migrated. The first tick turns that
+into an explicit list — starting from what is currently covered, so ticking a
+fourth pool gives you four rather than one.
+
+Two consequences of an explicit list are worth stating. It is **exhaustive**: on
+the built-in path an unrecognised pool id counts, rather than being dropped for
+being unfamiliar, but a list someone wrote by hand is the whole answer, so an id
+that is not on it does not count. And **every pool unticked is a real choice**,
+kept as an empty list rather than folded back into `null` — which would silently
+restore three pools nobody asked for.
+
+**The chosen ids never reach the public site.** A list of pools is a list of
+neighbourhoods, which is the very thing the pool is stripped from every trip to
+avoid saying, so `bin/publish.mjs` drops `cardPools` from the published settings
+the same way it drops the pools themselves. The public page never needs it: its
+trips arrive already filtered and its counts are worked out at publish time.
 
 Tapping **+** attaches the pool you're standing at. The app keeps a position
 warm while it is on screen, so the check-in resolves immediately rather than
@@ -408,13 +447,14 @@ your count, and is a shared code rather than real per-user accounts.
   the current state as JSON, but there is no way to load one back through the
   app. Restoring means writing the file to `/var/lib/sund/state.json` and
   restarting — see [DEPLOY.md](DEPLOY.md).
-- **Which pools count is fixed in code.** `card: true` in `lib/pools.js` marks
-  the three the membership covers. There is no way to change that from the app,
-  so a new card covering different pools means editing that file.
-- **One membership at a time.** The card has a single pair of dates, so the app
-  shows this year's card or last year's, not both. Older seasons stay in the
-  history and the chart, but their own cost per trip is gone once the dates
-  move on.
+- **One membership at a time.** The card has a single pair of dates and a single
+  set of pools, so the app shows this year's card or last year's, not both.
+  Older seasons stay in the history and the chart, but their own cost per trip
+  is gone once the dates move on.
+- **A pool has to be in the list to be picked.** The ⚙ list is the built-in 107
+  plus anywhere you have named on the spot. Somewhere you have never been and
+  that `lib/pools.js` has never heard of cannot be ticked until a swim there
+  puts it in the list.
 
 ## Files
 

@@ -134,8 +134,15 @@ async function build(state, rates) {
   const { total, offCard, outsideSeason } = tripSplit(full);
   const totals = { all: total, offCard, outsideSeason };
 
+  /* `cardPools` is a list of pool ids, which is a list of neighbourhoods — the
+     same thing the pool is dropped from every trip to avoid saying. The public
+     page never needs it: its trips arrive already filtered and its counts are
+     computed here. So it is dropped from the settings the same way. */
+  const settings = { ...full.settings, cardPools: null };
+
   await fs.writeFile(path.join(DIST, 'state.json'), JSON.stringify({
-    ...state, trips: publicTrips(state), pools: [], totals, generatedAt: new Date().toISOString()
+    ...state, trips: publicTrips(state), pools: [], settings, totals,
+    generatedAt: new Date().toISOString()
   }, null, 2));
   await fs.writeFile(path.join(DIST, 'rates.json'), JSON.stringify(rates, null, 2));
   await fs.writeFile(path.join(DIST, 'netlify.toml'), NETLIFY_TOML);
